@@ -16,8 +16,11 @@ red, amber, green or grey on a single page. It is for his own use only: one admi
   The config panel has an exclude list.
 - An open issue (or PR) makes a plugin amber.
 - `version.php` is parsed as text and never executed. Anything read from a repo is untrusted data.
-- The app code ships inside the package (`sources/`), not downloaded from an upstream repo. Fine for
-  private use; it would need splitting into its own repo before any submission to the YunoHost catalogue.
+- Personal app: it will not be submitted to the YunoHost catalogue. So the app code stays inside the
+  package (`sources/`), and linter warnings that only matter for the catalogue (README not generated,
+  not in the catalogue, no category) can be ignored.
+- Known package_linter false positives: `icon` on config panel buttons (core supports it; the schema
+  lags) and the systemd "harden the security" notice (the linter's regex wants leading whitespace).
 - Runs once a day on a systemd timer, 06:30 by default, Australia/Brisbane. Both are set in the config panel.
 - Alerts go out when a plugin gets worse (default; configurable). Channels: ntfy, email (local Postfix),
   Matrix. The first run never alerts.
