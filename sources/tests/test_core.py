@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fakes import (  # noqa: E402
-    CI_YAML, NOW, SCCA_TAG, FakeDirectory, FakeSource, failed_run, healthy_repo, ok_run, release, sample_directory,
-    sample_repos, version_php,
+    CI_YAML, NOW, SCCA_TAG, DeniedRepo, FakeDirectory, FakeRepo, FakeSource, denied_repo, failed_run, healthy_repo,
+    ok_run, release, sample_directory, sample_repos, version_php,
 )
 from plugindash import config as config_mod  # noqa: E402
 from plugindash.checks import Context, load_checks  # noqa: E402
@@ -317,6 +317,41 @@ class RunnerTests(unittest.TestCase):
         self.assertFalse(status["run"]["ok"])
         self.assertIn("rejected", status["run"]["error"])
         self.assertEqual(len(status["repos"]), 1)  # Last good data still shown.
+
+    def test_repo_the_token_cannot_read_is_grey(self):
+        repos = [healthy_repo("verzog/moodle-local_x", "local_x"), denied_repo("verzog/moodle-local_y")]
+        status = collect(self.cfg, sources=[FakeSource(repos)], directory=FakeDirectory(), now=NOW)
+        by_name = {r["full_name"]: r for r in status["repos"]}
+        self.assertEqual(by_name["verzog/moodle-local_x"]["status"], "green")
+        self.assertEqual(by_name["verzog/moodle-local_y"]["status"], "grey")
+        self.assertIn("Contents", by_name["verzog/moodle-local_y"]["summary"])
+
+    def test_token_that_cannot_read_any_repo_keeps_previous_data(self):
+        repo = healthy_repo("verzog/moodle-local_x", "local_x")
+        run(self.cfg, sources=[FakeSource([repo])], directory=FakeDirectory(), send_alerts=False)
+        status = run(self.cfg, sources=[FakeSource([denied_repo("verzog/moodle-local_x")])],
+                     directory=FakeDirectory(), send_alerts=False)
+        self.assertFalse(status["run"]["ok"])
+        self.assertIn("Contents", status["run"]["error"])
+        self.assertEqual(status["repos"][0]["status"], "green")  # Last good data still shown.
+
+    def test_refused_and_other_read_errors_are_not_blamed_on_the_token(self):
+        class Broken(FakeRepo):
+            def file(self, path, ref=None):
+                from plugindash.http import HttpError
+                raise HttpError(500, "https://gitlab.example.com/api/v4/projects/1/repository/files", "")
+
+        repos = [denied_repo("verzog/moodle-local_x"), Broken("group/moodle-local_y", source="gitlab")]
+        status = collect(self.cfg, sources=[FakeSource(repos)], directory=FakeDirectory(), now=NOW)
+        self.assertEqual(sorted(r["status"] for r in status["repos"]), ["grey", "grey"])
+
+    def test_gitlab_repo_the_token_cannot_read_gets_gitlab_advice(self):
+        repo = DeniedRepo("group/moodle-local_x", source="gitlab")
+        status = collect(self.cfg, sources=[FakeSource([repo, healthy_repo("verzog/moodle-local_y", "local_y")])],
+                         directory=FakeDirectory(), now=NOW)
+        entry = next(r for r in status["repos"] if r["full_name"] == "group/moodle-local_x")
+        self.assertIn("read_api", entry["summary"])
+        self.assertNotIn("Contents", entry["summary"])
 
     def test_alert_modes(self):
         repos = [{"full_name": "a", "status": "amber", "summary": ""}, {"full_name": "b", "status": "green",
