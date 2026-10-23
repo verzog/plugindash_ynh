@@ -329,6 +329,28 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(status["repos"][0]["status"], "amber")
         self.assertIn("lacks permission", status["repos"][0]["summary"])
 
+    def test_check_the_token_cannot_run_ignores_severity_overrides(self):
+        def no_issues_permission():
+            from plugindash.http import AuthError
+            raise AuthError(403, "https://api.github.com/repos/verzog/moodle-local_x/issues", "")
+
+        self.cfg["severity_overrides"] = {"issues": "info"}
+        repo = healthy_repo("verzog/moodle-local_x", "local_x")
+        repo.open_issues = no_issues_permission
+        status = collect(self.cfg, sources=[FakeSource([repo])], directory=FakeDirectory(), now=NOW)
+        self.assertEqual(status["repos"][0]["status"], "amber")
+
+    def test_check_answered_with_404_is_amber(self):
+        def private_repo_without_issues_permission():
+            from plugindash.http import NotFound
+            raise NotFound(404, "https://api.github.com/repos/verzog/moodle-local_x/issues", "")
+
+        repo = healthy_repo("verzog/moodle-local_x", "local_x")
+        repo.open_issues = private_repo_without_issues_permission
+        status = collect(self.cfg, sources=[FakeSource([repo])], directory=FakeDirectory(), now=NOW)
+        self.assertEqual(status["repos"][0]["status"], "amber")
+        self.assertIn("404", status["repos"][0]["summary"])
+
     def test_alert_modes(self):
         repos = [{"full_name": "a", "status": "amber", "summary": ""}, {"full_name": "b", "status": "green",
                                                                          "summary": ""}]

@@ -29,6 +29,7 @@ class Finding:
     level: str
     message: str
     url: str | None = None
+    overridable: bool = True  # False keeps severity overrides from changing the level.
 
     def to_dict(self) -> dict[str, Any]:
         return {"check": self.check, "level": self.level, "message": self.message, "url": self.url}
