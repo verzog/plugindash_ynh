@@ -117,6 +117,13 @@ def check_repo(repo, checks, ctx: Context) -> dict[str, Any] | None:
     }
 
 
+# What to grant when a token can list a repo but not read its files.
+ACCESS_HINTS = {
+    "github": "Give it read access to Contents.",
+    "gitlab": "Give it the read_api scope and access to this project.",
+}
+
+
 def unreadable_entry(repo, message: str) -> dict[str, Any]:
     """Dashboard entry (grey) for a repo whose files couldn't be read."""
     return {
@@ -152,9 +159,10 @@ def collect(cfg: dict[str, Any], sources=None, directory=None, now: datetime | N
     excluded = set(cfg["exclude_repos"])
     entries: list[dict[str, Any]] = []
     errors: list[str] = []
-    # Repos whose files the token could and couldn't read (list.append is thread-safe).
+    # Repos whose files could be read, were refused, or failed otherwise (list.append is thread-safe).
     readable: list[str] = []
     denied: list[str] = []
+    failed: list[str] = []
     for source in sources:
         try:
             repos = source.list_repos()
@@ -171,15 +179,14 @@ def collect(cfg: dict[str, Any], sources=None, directory=None, now: datetime | N
             try:
                 entry = check_repo(repo, checks, ctx)
             except AuthError as err:
-                # Shown grey rather than dropped, so a token missing Contents access is noticed.
+                # Shown grey rather than dropped, so a token missing read access is noticed.
                 log.warning("Can't read %s: the token lacks access (%s)", repo.full_name, err)
                 denied.append(repo.full_name)
-                return unreadable_entry(
-                    repo, f"The token can't read this repo's files (HTTP {err.status}). "
-                    "Give it read access to Contents.",
-                )
+                hint = ACCESS_HINTS.get(repo.source, "Give it read access to the repository.")
+                return unreadable_entry(repo, f"The token can't read this repo's files (HTTP {err.status}). {hint}")
             except HttpError as err:
                 log.warning("Skipping %s: %s", repo.full_name, err)
+                failed.append(repo.full_name)
                 return unreadable_entry(repo, f"Couldn't read the repo ({err})")
             readable.append(repo.full_name)
             return entry
@@ -189,9 +196,12 @@ def collect(cfg: dict[str, Any], sources=None, directory=None, now: datetime | N
 
     if errors and not entries:
         raise FatalRunError("; ".join(errors))
-    if denied and not readable:
+    if denied and not readable and not failed:
         # Every read was refused: keep the previous results rather than a page of grey.
-        errors.append("The token can't read the files in any repository. Give it read access to Contents.")
+        errors.append(
+            "The token can't read the files in any repository. Check its read access "
+            "(GitHub: Contents; GitLab: the read_api scope)."
+        )
         raise FatalRunError("; ".join(errors))
 
     entries.sort(key=lambda e: (-STATUS_RANK[e["status"]], e["full_name"].lower()))
