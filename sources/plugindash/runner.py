@@ -67,7 +67,12 @@ def check_repo(repo, checks, ctx: Context) -> dict[str, Any] | None:
     else:
         for check in checks:
             try:
-                findings.extend(check.run(repo, plugin, ctx) or [])
+                results = list(check.run(repo, plugin, ctx) or [])
+                # Catch a bad level here, inside this check's error handling; later it would stop the run.
+                for finding in results:
+                    if not isinstance(finding, Finding) or finding.level not in LEVELS:
+                        raise ValueError(f"returned an invalid finding: {finding!r}")
+                findings.extend(results)
             # Amber, not info, and not changed by severity overrides: a check that couldn't run
             # must not let the repo look healthy.
             except AuthError as err:
@@ -127,6 +132,26 @@ def check_repo(repo, checks, ctx: Context) -> dict[str, Any] | None:
     }
 
 
+# What to grant when a token can list a repo but not read its files.
+ACCESS_HINTS = {
+    "github": "Give it read access to Contents.",
+    "gitlab": "Give it the read_api scope and access to this project.",
+}
+
+
+def unreadable_entry(repo, message: str) -> dict[str, Any]:
+    """Dashboard entry (grey) for a repo whose files couldn't be read."""
+    return {
+        "name": repo.name, "full_name": repo.full_name, "url": repo.html_url, "source": repo.source,
+        "private": repo.private, "fork": repo.fork, "archived": repo.archived,
+        "default_branch": repo.default_branch, "pushed_at": None, "component": None, "release": None,
+        "version": None, "maturity": None, "supported": None, "latest_tag": None,
+        "latest_tag_url": None, "open_issues": 0, "open_prs": 0, "status": "grey",
+        "summary": message,
+        "findings": [Finding("collector", INFO, message).to_dict()],
+    }
+
+
 def collect(cfg: dict[str, Any], sources=None, directory=None, now: datetime | None = None) -> dict[str, Any]:
     started = time.monotonic()
     now = now or datetime.now(timezone.utc)
@@ -149,6 +174,10 @@ def collect(cfg: dict[str, Any], sources=None, directory=None, now: datetime | N
     excluded = set(cfg["exclude_repos"])
     entries: list[dict[str, Any]] = []
     errors: list[str] = []
+    # Repos whose files could be read, were refused, or failed otherwise (list.append is thread-safe).
+    readable: list[str] = []
+    denied: list[str] = []
+    failed: list[str] = []
     for source in sources:
         try:
             repos = source.list_repos()
@@ -163,26 +192,31 @@ def collect(cfg: dict[str, Any], sources=None, directory=None, now: datetime | N
 
         def work(repo):
             try:
-                return check_repo(repo, checks, ctx)
+                entry = check_repo(repo, checks, ctx)
             except AuthError as err:
-                log.warning("Skipping %s: token can't read it (%s)", repo.full_name, err)
+                # Shown grey rather than dropped, so a token missing read access is noticed.
+                log.warning("Can't read %s: the token lacks access (%s)", repo.full_name, err)
+                denied.append(repo.full_name)
+                hint = ACCESS_HINTS.get(repo.source, "Give it read access to the repository.")
+                return unreadable_entry(repo, f"The token can't read this repo's files (HTTP {err.status}). {hint}")
             except HttpError as err:
                 log.warning("Skipping %s: %s", repo.full_name, err)
-                return {
-                    "name": repo.name, "full_name": repo.full_name, "url": repo.html_url, "source": repo.source,
-                    "private": repo.private, "fork": repo.fork, "archived": repo.archived,
-                    "default_branch": repo.default_branch, "pushed_at": None, "component": None, "release": None,
-                    "version": None, "maturity": None, "supported": None, "latest_tag": None,
-                    "latest_tag_url": None, "open_issues": 0, "open_prs": 0, "status": "grey",
-                    "summary": f"Couldn't read the repo ({err})",
-                    "findings": [Finding("collector", INFO, f"Couldn't read the repo ({err})").to_dict()],
-                }
-            return None
+                failed.append(repo.full_name)
+                return unreadable_entry(repo, f"Couldn't read the repo ({err})")
+            readable.append(repo.full_name)
+            return entry
 
         with ThreadPoolExecutor(max_workers=4) as pool:
             entries.extend(e for e in pool.map(work, todo) if e)
 
     if errors and not entries:
+        raise FatalRunError("; ".join(errors))
+    if denied and not readable and not failed:
+        # Every read was refused: keep the previous results rather than a page of grey.
+        errors.append(
+            "The token can't read the files in any repository. Check its read access "
+            "(GitHub: Contents; GitLab: the read_api scope)."
+        )
         raise FatalRunError("; ".join(errors))
 
     entries.sort(key=lambda e: (-STATUS_RANK[e["status"]], e["full_name"].lower()))
@@ -243,7 +277,7 @@ def run(cfg: dict[str, Any], send_alerts: bool = True, sources=None, directory=N
     www, data = cfg["www_dir"], cfg["data_dir"]
     history = History(os.path.join(data, "history.sqlite"))
     try:
-        previous = history.last_good_statuses()
+        previous = history.alert_baseline()
         try:
             status = collect(cfg, sources=sources, directory=directory, now=started)
         except FatalRunError as err:
@@ -275,9 +309,16 @@ def run(cfg: dict[str, Any], send_alerts: bool = True, sources=None, directory=N
 
         changes = changes_to_alert(previous, status["repos"], cfg["alert_on"])
         status["alerts"] = {}
+        baseline = {r["full_name"]: r["status"] for r in status["repos"]}
         if changes and send_alerts:
             title, body, priority = alert_text(changes)
             status["alerts"] = send_all(cfg, title, body, priority, cfg.get("public_url") or None)
+            if status["alerts"] and "sent" not in status["alerts"].values():
+                # Every channel failed: keep the old colours so the next run sends this alert again.
+                log.warning("No alert channel delivered; the alert will be retried on the next run")
+                for change in changes:
+                    baseline[change["repo"]["full_name"]] = change["old"]
+        history.set_alert_baseline(baseline)
         log.info(
             "Done: %d repos (%s) in %ss, %d API calls; %d alert-worthy changes",
             len(status["repos"]), ", ".join(f"{v} {k}" for k, v in status["counts"].items()),

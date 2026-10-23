@@ -118,6 +118,18 @@ class FakeRepo(RepoView):
         return f"{self.html_url}/security/dependabot"
 
 
+class DeniedRepo(FakeRepo):
+    """A repo the token can list but whose files it can't read (no Contents permission)."""
+
+    def file(self, path, ref=None):
+        from plugindash.http import AuthError
+        raise AuthError(403, f"https://api.github.com/repos/{self.full_name}/contents/{path}", "")
+
+
+def denied_repo(full_name):
+    return DeniedRepo(full_name)
+
+
 class FakeSource(Source):
     name = "github"
 

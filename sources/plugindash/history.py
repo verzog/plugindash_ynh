@@ -24,6 +24,12 @@ CREATE TABLE IF NOT EXISTS statuses (
     PRIMARY KEY (run_id, repo)
 );
 CREATE INDEX IF NOT EXISTS statuses_repo ON statuses(repo);
+-- The colour each repo had when you were last told about it. Alerts compare against this,
+-- so a change whose alert no channel delivered is sent again on the next run.
+CREATE TABLE IF NOT EXISTS alert_baseline (
+    repo TEXT PRIMARY KEY,
+    status TEXT NOT NULL
+);
 """
 
 
@@ -44,6 +50,16 @@ class History:
             return {}
         rows = self.db.execute("SELECT repo, status FROM statuses WHERE run_id = ?", (row[0],)).fetchall()
         return dict(rows)
+
+    def alert_baseline(self) -> dict[str, str]:
+        """Repo colours that alerts compare against (falls back to the last good run)."""
+        rows = self.db.execute("SELECT repo, status FROM alert_baseline").fetchall()
+        return dict(rows) or self.last_good_statuses()
+
+    def set_alert_baseline(self, statuses: dict[str, str]) -> None:
+        self.db.execute("DELETE FROM alert_baseline")
+        self.db.executemany("INSERT INTO alert_baseline (repo, status) VALUES (?, ?)", list(statuses.items()))
+        self.db.commit()
 
     def record(self, started: datetime, finished: datetime, ok: bool, error: str | None,
                statuses: dict[str, tuple[str, str]]) -> int:

@@ -25,29 +25,34 @@ get__last_run() {
         fi
         return
     fi
+    # Any problem reading the file must still print a status, or the whole panel fails to load.
     python3 -I - "$status_file" <<'PY'
 import json, sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-with open(sys.argv[1], encoding="utf-8") as handle:
-    status = json.load(handle)
-run = status.get("run") or {}
 try:
-    tz = ZoneInfo(status.get("timezone") or "UTC")
-except Exception:
-    tz = ZoneInfo("UTC")
-when = "never"
-if run.get("finished_at"):
-    when = datetime.fromisoformat(run["finished_at"]).astimezone(tz).strftime("%d/%m/%Y %H:%M")
-counts = status.get("counts") or {}
-if not run.get("ok", True):
-    style = "danger"
-    text = f"Last check ({when}) failed: {(run.get('error') or 'unknown error').rstrip('.')}. The page still shows older results."
-else:
-    style = "danger" if counts.get("red") else ("warning" if counts.get("amber") else "success")
-    text = (f"Last check {when}: {counts.get('red', 0)} need fixing, {counts.get('amber', 0)} need attention, "
-            f"{counts.get('green', 0)} healthy, {counts.get('grey', 0)} archived.")
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        status = json.load(handle)
+    run = status.get("run") or {}
+    try:
+        tz = ZoneInfo(status.get("timezone") or "UTC")
+    except Exception:
+        tz = ZoneInfo("UTC")
+    when = "never"
+    if run.get("finished_at"):
+        when = datetime.fromisoformat(run["finished_at"]).astimezone(tz).strftime("%d/%m/%Y %H:%M")
+    counts = status.get("counts") or {}
+    if not run.get("ok", True):
+        style = "danger"
+        text = f"Last check ({when}) failed: {(run.get('error') or 'unknown error').rstrip('.')}. The page still shows older results."
+    else:
+        style = "danger" if counts.get("red") else ("warning" if counts.get("amber") else "success")
+        text = (f"Last check {when}: {counts.get('red', 0)} need fixing, {counts.get('amber', 0)} need attention, "
+                f"{counts.get('green', 0)} healthy, {counts.get('grey', 0)} archived.")
+except Exception as err:
+    style = "warning"
+    text = f"Couldn't read the last check's results ({type(err).__name__}). Use Run the check now to rebuild them."
 print(f'style: "{style}"')
 print("ask: " + json.dumps(text))
 PY
@@ -58,9 +63,7 @@ PY
 #=================================================
 
 validate__timezone() {
-    if [[ ! "$timezone" =~ ^[A-Za-z0-9_+/-]+$ ]] || [ ! -f "/usr/share/zoneinfo/$timezone" ]; then
-        echo "Unknown time zone. Use an IANA name such as Australia/Brisbane."
-    fi
+    plugindash_timezone_error "$timezone"
 }
 
 validate__run_time() {

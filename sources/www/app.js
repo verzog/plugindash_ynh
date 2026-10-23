@@ -44,7 +44,11 @@
     return a;
   }
 
-  function slug(name) { return 'repo-' + name.replace(/[^A-Za-z0-9_-]+/g, '-'); }
+  /* Reversible, so two repos can never share an id: letters, digits and '-' are kept, any other
+     character (including '_') becomes _<hex code>_. The result is still a valid CSS identifier. */
+  function slug(name) {
+    return 'repo-' + name.replace(/[^A-Za-z0-9-]/g, function (c) { return '_' + c.charCodeAt(0).toString(16) + '_'; });
+  }
 
   function relativeAge(iso) {
     var days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
@@ -113,7 +117,8 @@
   function ticks(repo) {
     var wrap = el('span', 'ticks');
     var days = state.history[repo.full_name] || [];
-    var fmt = formatter(state.status.timezone, false);
+    // day.date is already the local day (YYYY-MM-DD), so format it in UTC: no second conversion.
+    var fmt = formatter('UTC', false);
     var padding = Math.max(0, 30 - days.length);
     for (var i = 0; i < padding; i++) { wrap.appendChild(el('i')); }
     days.slice(-30).forEach(function (day) {
