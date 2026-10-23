@@ -49,6 +49,8 @@ ram.runtime = "100M"
     help.en = "An IANA name such as Australia/Brisbane or Europe/Paris."
     type = "string"
     default = "Australia/Brisbane"
+    pattern.regexp = '^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$'
+    pattern.error = "Use an IANA name such as Australia/Brisbane or Europe/Paris."
 
 [resources]
     [resources.system_user]

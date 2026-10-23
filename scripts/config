@@ -58,9 +58,7 @@ PY
 #=================================================
 
 validate__timezone() {
-    if [[ ! "$timezone" =~ ^[A-Za-z0-9_+/-]+$ ]] || [ ! -f "/usr/share/zoneinfo/$timezone" ]; then
-        echo "Unknown time zone. Use an IANA name such as Australia/Brisbane."
-    fi
+    plugindash_timezone_error "$timezone"
 }
 
 validate__run_time() {
