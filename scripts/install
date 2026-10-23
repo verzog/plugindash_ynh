@@ -1,0 +1,45 @@
+#!/bin/bash
+
+#=================================================
+# IMPORT GENERIC HELPERS
+#=================================================
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+#=================================================
+# INITIALIZE AND STORE SETTINGS
+#=================================================
+ynh_script_progression "Storing default settings..."
+
+# Install answers ($github_owners, $timezone) are already saved. This stores the
+# remaining settings and sets each one as a shell variable for the steps below.
+plugindash_set_defaults
+
+#=================================================
+# DEPLOY THE APP
+#=================================================
+ynh_script_progression "Installing the dashboard files..."
+
+plugindash_deploy_code
+
+#=================================================
+# APP CONFIGURATION
+#=================================================
+ynh_script_progression "Writing the configuration..."
+
+plugindash_write_config
+
+#=================================================
+# SYSTEM CONFIGURATION
+#=================================================
+ynh_script_progression "Adding the web server and daily timer configuration..."
+
+plugindash_add_nginx
+plugindash_add_systemd
+
+#=================================================
+# END OF SCRIPT
+#=================================================
+
+ynh_script_progression "Installation of $app completed"

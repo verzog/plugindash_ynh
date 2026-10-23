@@ -1,0 +1,187 @@
+#:schema https://github.com/YunoHost/apps/raw/main/schemas/config_panel.v1.schema.json
+
+version = "1.0"
+
+[main]
+name = "Plugin Dashboard"
+services = []
+
+    [main.run]
+    name = "Check now"
+
+        [main.run.last_run]
+        ask = "No check has run yet."
+        type = "alert"
+        style = "info"
+
+        [main.run.run_now]
+        ask = "Run the check now"
+        type = "button"
+        style = "success"
+        icon = "refresh"
+        help = "Takes a minute or two. Save any settings changes first."
+
+        [main.run.test_alert]
+        ask = "Send a test alert"
+        type = "button"
+        style = "info"
+        icon = "bell"
+        help = "Sends a message through every alert channel you've filled in below."
+
+    [main.github]
+    name = "GitHub"
+
+        [main.github.github_token]
+        ask = "GitHub token"
+        type = "string"
+        redact = true
+        optional = true
+        help = """\
+        A fine-grained personal access token with read-only access to all your repositories: \
+        Metadata, Contents, Issues, Pull requests, Actions and Dependabot alerts. \
+        Create one at https://github.com/settings/personal-access-tokens/new and set a reminder for its expiry date.\
+        """
+
+        [main.github.github_owners]
+        ask = "Accounts or organisations to scan"
+        type = "tags"
+        help = "Every repository owned by these accounts that has a Moodle version.php is tracked."
+
+        [main.github.include_forks]
+        ask = "Include forks"
+        type = "boolean"
+        help = "For example your fork of local_codechecker."
+
+        [main.github.exclude_repos]
+        ask = "Repositories to ignore"
+        type = "tags"
+        optional = true
+        help = "Repository names (moodle-local_old) or owner/name."
+
+    [main.gitlab]
+    name = "GitLab (self-hosted)"
+
+        [main.gitlab.gitlab_enabled]
+        ask = "Also check GitLab"
+        type = "boolean"
+
+        [main.gitlab.gitlab_url]
+        ask = "GitLab address"
+        type = "url"
+        optional = true
+        visible = "gitlab_enabled"
+        example = "https://gitlab.example.com"
+
+        [main.gitlab.gitlab_token]
+        ask = "GitLab token"
+        type = "string"
+        redact = true
+        optional = true
+        visible = "gitlab_enabled"
+        help = "A personal or group access token with the read_api scope."
+
+    [main.checks]
+    name = "Checks"
+
+        [main.checks.disabled_checks]
+        ask = "Turn off these checks"
+        type = "tags"
+        optional = true
+        help = """\
+        Check IDs: ci_status, ci_activity, release_match, release_zip, unreleased, issues, moodle_support, \
+        licence, security_alerts, plugins_directory.\
+        """
+
+        [main.checks.severity_overrides]
+        ask = "Change how serious a check is"
+        type = "tags"
+        optional = true
+        help = "Entries like unreleased=info (levels: red, amber, info). Info never changes a plugin's colour."
+
+        [main.checks.stale_days]
+        ask = "Warn when CI hasn't run for this many days"
+        type = "number"
+        min = 1
+        max = 365
+
+        [main.checks.ci_ignore_workflows]
+        ask = "Workflows that aren't CI"
+        type = "tags"
+        optional = true
+        help = "Workflow file names to skip in the CI checks, such as release.yml."
+
+    [main.schedule]
+    name = "Schedule"
+
+        [main.schedule.run_time]
+        ask = "Daily check at"
+        type = "time"
+
+        [main.schedule.timezone]
+        ask = "Time zone"
+        type = "string"
+        help = "Used for the schedule and for dates on the page. An IANA name such as Australia/Brisbane."
+
+    [main.alerts]
+    name = "Alerts"
+    help = "Fill in one or more channels. Alerts are sent after the daily check when a plugin's colour changes."
+
+        [main.alerts.alert_on]
+        ask = "Send an alert"
+        type = "select"
+        choices.worse = "When a plugin gets worse"
+        choices.any = "On any colour change"
+        choices.none = "Never"
+
+        [main.alerts.ntfy_url]
+        ask = "ntfy server"
+        type = "url"
+        optional = true
+        example = "https://ntfy.sh"
+
+        [main.alerts.ntfy_topic]
+        ask = "ntfy topic"
+        type = "string"
+        optional = true
+
+        [main.alerts.ntfy_token]
+        ask = "ntfy access token"
+        type = "string"
+        redact = true
+        optional = true
+        help = "Only needed if your topic is protected."
+
+        [main.alerts.email_to]
+        ask = "Email address"
+        type = "email"
+        optional = true
+        help = "Sent through this server's own mail system."
+
+        [main.alerts.matrix_homeserver]
+        ask = "Matrix homeserver"
+        type = "url"
+        optional = true
+        example = "https://matrix.example.com"
+
+        [main.alerts.matrix_room]
+        ask = "Matrix room ID"
+        type = "string"
+        optional = true
+        example = "!abcdefg:example.com"
+
+        [main.alerts.matrix_token]
+        ask = "Matrix access token"
+        type = "string"
+        redact = true
+        optional = true
+        help = "Use a separate bot account, invited to the room."
+
+    [main.metrics]
+    name = "Prometheus metrics"
+    help = "Plugin health is published at <your dashboard address>/metrics for Prometheus to scrape."
+
+        [main.metrics.metrics_allow]
+        ask = "Addresses allowed to read /metrics"
+        type = "tags"
+        optional = true
+        help = "IP addresses or ranges, such as your Prometheus server's Tailscale address. Everyone else is refused."

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Plugin Dashboard</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+  <header class="masthead">
+    <div class="title-block">
+      <h1>Moodle plugins</h1>
+      <p class="checked" id="checked">Loading…</p>
+    </div>
+    <div class="rack" id="rack" aria-label="Every plugin at a glance; select one to jump to it"></div>
+  </header>
+
+  <div class="banner" id="banner" role="alert" hidden></div>
+
+  <nav class="filters" aria-label="Filter plugins">
+    <div class="segments" id="segments" role="group"></div>
+    <label class="search">
+      <span class="visually-hidden">Search plugins</span>
+      <input type="search" id="search" placeholder="Search by name or component" autocomplete="off">
+    </label>
+  </nav>
+
+  <main id="list" class="list" aria-live="polite"></main>
+
+  <p class="empty" id="empty" hidden></p>
+
+  <details class="about" id="about">
+    <summary>What the colours mean and which checks run</summary>
+    <div class="about-body">
+      <ul class="legend">
+        <li><span class="dot red"></span><strong>Needs fixing</strong>: something is broken or inconsistent; fix it before the next release.</li>
+        <li><span class="dot amber"></span><strong>Needs attention</strong>: open issues, unreleased work, or something going stale.</li>
+        <li><span class="dot green"></span><strong>Healthy</strong>: every check passed.</li>
+        <li><span class="dot grey"></span><strong>Archived or unreadable</strong>: not checked.</li>
+      </ul>
+      <dl class="checks" id="checks"></dl>
+      <p class="fineprint" id="fineprint"></p>
+    </div>
+  </details>
+</div>
+
+<template id="row-template">
+  <article class="row">
+    <button class="row-head" type="button" aria-expanded="false">
+      <span class="bar" aria-hidden="true"></span>
+      <span class="ident">
+        <span class="name"></span>
+        <span class="component"></span>
+      </span>
+      <span class="summary"></span>
+      <span class="meta">
+        <span class="tag"></span>
+        <span class="range"></span>
+      </span>
+      <span class="ticks" aria-hidden="true"></span>
+      <span class="state"></span>
+    </button>
+    <div class="detail" hidden>
+      <ul class="findings"></ul>
+      <p class="links"></p>
+    </div>
+  </article>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>

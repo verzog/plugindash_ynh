@@ -1,0 +1,38 @@
+#!/bin/bash
+
+#=================================================
+# IMPORT GENERIC HELPERS
+#=================================================
+
+source ../settings/scripts/_common.sh
+source /usr/share/yunohost/helpers
+
+#=================================================
+# RESTORE THE APP AND DATA
+#=================================================
+ynh_script_progression "Restoring the dashboard files and history..."
+
+ynh_restore "$install_dir"
+ynh_restore "$data_dir"
+plugindash_fix_permissions
+chown "$app:$app" "$install_dir/config.json"
+chmod 600 "$install_dir/config.json"
+
+#=================================================
+# RESTORE SYSTEM CONFIGURATIONS
+#=================================================
+ynh_script_progression "Restoring the web server and daily timer configuration..."
+
+ynh_restore "/etc/nginx/conf.d/$domain.d/$app.conf"
+ynh_restore "/etc/systemd/system/$app.service"
+ynh_restore "/etc/systemd/system/$app.timer"
+systemctl daemon-reload
+systemctl enable --now "$app.timer" --quiet
+
+ynh_systemctl --service=nginx --action=reload
+
+#=================================================
+# END OF SCRIPT
+#=================================================
+
+ynh_script_progression "Restoration completed for $app"

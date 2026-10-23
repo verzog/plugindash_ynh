@@ -1,0 +1,25 @@
+#!/bin/bash
+
+#=================================================
+# IMPORT GENERIC HELPERS
+#=================================================
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+#=================================================
+# REMOVE SYSTEM CONFIGURATIONS
+#=================================================
+ynh_script_progression "Removing the daily timer and web server configuration..."
+
+plugindash_remove_systemd
+ynh_config_remove_nginx
+
+# The install and data folders, system user and permissions are removed by YunoHost
+# (the data folder, with the history, is kept unless you remove with --purge).
+
+#=================================================
+# END OF SCRIPT
+#=================================================
+
+ynh_script_progression "Removal of $app completed"
