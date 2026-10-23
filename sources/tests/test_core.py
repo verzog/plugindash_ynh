@@ -318,6 +318,17 @@ class RunnerTests(unittest.TestCase):
         self.assertIn("rejected", status["run"]["error"])
         self.assertEqual(len(status["repos"]), 1)  # Last good data still shown.
 
+    def test_check_the_token_cannot_run_is_amber(self):
+        def no_actions_permission():
+            from plugindash.http import AuthError
+            raise AuthError(403, "https://api.github.com/repos/verzog/moodle-local_x/actions/workflows", "")
+
+        repo = healthy_repo("verzog/moodle-local_x", "local_x")
+        repo.workflows = no_actions_permission
+        status = collect(self.cfg, sources=[FakeSource([repo])], directory=FakeDirectory(), now=NOW)
+        self.assertEqual(status["repos"][0]["status"], "amber")
+        self.assertIn("lacks permission", status["repos"][0]["summary"])
+
     def test_alert_modes(self):
         repos = [{"full_name": "a", "status": "amber", "summary": ""}, {"full_name": "b", "status": "green",
                                                                          "summary": ""}]

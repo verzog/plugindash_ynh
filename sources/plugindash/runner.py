@@ -69,8 +69,9 @@ def check_repo(repo, checks, ctx: Context) -> dict[str, Any] | None:
             try:
                 findings.extend(check.run(repo, plugin, ctx) or [])
             except AuthError as err:
+                # Amber, not info: a check that couldn't run must not let the repo look healthy.
                 findings.append(Finding(
-                    check.ID, INFO, f"{check.TITLE}: the token can't read this (HTTP {err.status})",
+                    check.ID, AMBER, f"{check.TITLE}: couldn't run, the token lacks permission (HTTP {err.status})",
                 ))
             except HttpError as err:
                 findings.append(Finding(check.ID, INFO, f"{check.TITLE}: couldn't fetch data ({err})"))
