@@ -113,7 +113,8 @@
   function ticks(repo) {
     var wrap = el('span', 'ticks');
     var days = state.history[repo.full_name] || [];
-    var fmt = formatter(state.status.timezone, false);
+    // day.date is already the local day (YYYY-MM-DD), so format it in UTC: no second conversion.
+    var fmt = formatter('UTC', false);
     var padding = Math.max(0, 30 - days.length);
     for (var i = 0; i < padding; i++) { wrap.appendChild(el('i')); }
     days.slice(-30).forEach(function (day) {
