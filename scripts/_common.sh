@@ -37,6 +37,15 @@ plugindash_set_defaults() {
     ynh_app_setting_set_default --key=metrics_allow --value="127.0.0.1,::1"
 }
 
+# Prints an error if $1 isn't a time zone this server knows (an IANA name such as
+# Australia/Brisbane). Used by the install script and the config panel. The character
+# check also stops odd input reaching the systemd timer, which uses the time zone.
+plugindash_timezone_error() {
+    if [[ ! "$1" =~ ^[A-Za-z0-9_+/-]+$ ]] || [ ! -f "/usr/share/zoneinfo/$1" ]; then
+        echo "Unknown time zone '$1'. Use an IANA name such as Australia/Brisbane."
+    fi
+}
+
 # Copy the collector and the static page from the package into $install_dir.
 # Generated files (status.json, history.json, metrics) are left alone.
 plugindash_deploy_code() {

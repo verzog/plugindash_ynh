@@ -8,6 +8,16 @@ source _common.sh
 source /usr/share/yunohost/helpers
 
 #=================================================
+# CHECK THE INSTALL ANSWERS
+#=================================================
+
+# A wrong time zone would otherwise only show up later as a broken daily timer.
+timezone_error="$(plugindash_timezone_error "$timezone")"
+if [ -n "$timezone_error" ]; then
+    ynh_die "$timezone_error"
+fi
+
+#=================================================
 # INITIALIZE AND STORE SETTINGS
 #=================================================
 ynh_script_progression "Storing default settings..."
