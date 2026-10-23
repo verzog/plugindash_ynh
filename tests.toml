@@ -1,0 +1,11 @@
+#:schema https://raw.githubusercontent.com/YunoHost/apps/main/schemas/tests.v1.schema.json
+
+test_format = 1.0
+
+[default]
+
+    args.github_owners = "verzog"
+    args.timezone = "Australia/Brisbane"
+
+    # No token during package_check, so the collector is never run against GitHub here.
+    # The Python unit tests (sources/tests) cover the collector itself.

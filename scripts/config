@@ -1,0 +1,139 @@
+#!/bin/bash
+
+#=================================================
+# IMPORT GENERIC HELPERS
+#=================================================
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+ynh_abort_if_errors
+
+#=================================================
+# STATUS SHOWN AT THE TOP OF THE PANEL
+#=================================================
+
+get__last_run() {
+    local status_file="$install_dir/www/status.json"
+    if [ ! -s "$status_file" ]; then
+        if [ -z "${github_token:-}" ]; then
+            echo "style: \"warning\""
+            echo "ask: \"No GitHub token yet. Add one in the GitHub section below, save, then use Run the check now.\""
+        else
+            echo "style: \"info\""
+            echo "ask: \"No check has run yet. Use Run the check now.\""
+        fi
+        return
+    fi
+    python3 -I - "$status_file" <<'PY'
+import json, sys
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    status = json.load(handle)
+run = status.get("run") or {}
+try:
+    tz = ZoneInfo(status.get("timezone") or "UTC")
+except Exception:
+    tz = ZoneInfo("UTC")
+when = "never"
+if run.get("finished_at"):
+    when = datetime.fromisoformat(run["finished_at"]).astimezone(tz).strftime("%d/%m/%Y %H:%M")
+counts = status.get("counts") or {}
+if not run.get("ok", True):
+    style = "danger"
+    text = f"Last check ({when}) failed: {(run.get('error') or 'unknown error').rstrip('.')}. The page still shows older results."
+else:
+    style = "danger" if counts.get("red") else ("warning" if counts.get("amber") else "success")
+    text = (f"Last check {when}: {counts.get('red', 0)} need fixing, {counts.get('amber', 0)} need attention, "
+            f"{counts.get('green', 0)} healthy, {counts.get('grey', 0)} archived.")
+print(f'style: "{style}"')
+print("ask: " + json.dumps(text))
+PY
+}
+
+#=================================================
+# VALIDATORS (an echoed message rejects the change)
+#=================================================
+
+validate__timezone() {
+    if [[ ! "$timezone" =~ ^[A-Za-z0-9_+/-]+$ ]] || [ ! -f "/usr/share/zoneinfo/$timezone" ]; then
+        echo "Unknown time zone. Use an IANA name such as Australia/Brisbane."
+    fi
+}
+
+validate__run_time() {
+    if [[ ! "$run_time" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]]; then
+        echo "Use 24-hour HH:MM, for example 06:30."
+    fi
+}
+
+validate__severity_overrides() {
+    local entry
+    local IFS=","
+    for entry in $severity_overrides; do
+        entry="$(echo "$entry" | tr -d '[:space:]')"
+        [ -z "$entry" ] && continue
+        if [[ ! "$entry" =~ ^[a-z0-9_]+=(red|amber|info|ok)$ ]]; then
+            echo "Each entry must look like check_id=level, with level red, amber, info or ok."
+            return
+        fi
+    done
+}
+
+validate__metrics_allow() {
+    if ! python3 -I -c '
+import ipaddress, sys
+for item in sys.argv[1].split(","):
+    item = item.strip()
+    if item:
+        ipaddress.ip_network(item, strict=False)
+' "$metrics_allow" 2>/dev/null; then
+        echo "Use IP addresses or ranges only, such as 127.0.0.1 or 100.64.0.0/10."
+    fi
+}
+
+validate__gitlab_url() {
+    if [ "${gitlab_enabled:-0}" = "1" ] && [ -z "$gitlab_url" ]; then
+        echo "Enter your GitLab address, or turn GitLab off."
+    fi
+}
+
+#=================================================
+# APPLY: rebuild config.json, the timer and the nginx metrics rules
+#=================================================
+
+ynh_app_config_apply() {
+    _ynh_app_config_apply
+    plugindash_write_config
+    plugindash_add_systemd
+    plugindash_add_nginx
+}
+
+#=================================================
+# BUTTONS
+#=================================================
+
+run__run_now() {
+    ynh_print_info "Running the check. This can take a minute or two..."
+    if systemctl start "$app.service"; then
+        ynh_print_info "Check finished."
+    else
+        ynh_print_warn "The check reported a problem. Details:"
+    fi
+    journalctl --unit="$app.service" --lines=12 --no-pager --output=cat --since="-30min" 2>/dev/null \
+        | while IFS= read -r line; do ynh_print_info "$line"; done
+}
+
+run__test_alert() {
+    local output
+    if output="$(runuser -u "$app" -- python3 -I -B "$install_dir/app/run.py" --config "$install_dir/config.json" \
+        test-alert 2>&1)"; then
+        ynh_print_info "$output"
+    else
+        ynh_print_warn "$output"
+    fi
+}
+
+ynh_app_config_run "$1"

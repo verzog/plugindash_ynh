@@ -1,0 +1,13 @@
+"""Example extension check. Rename to example_changes_file.py to turn it on."""
+
+from plugindash.model import AMBER, OK, Finding
+
+ID = "changes_file"
+TITLE = "CHANGES.md present"
+DESCRIPTION = "Amber if the plugin has no CHANGES.md."
+
+
+def run(repo, plugin, ctx):
+    if repo.file("CHANGES.md") is None:
+        return [Finding(ID, AMBER, "No CHANGES.md", repo.html_url)]
+    return [Finding(ID, OK, "CHANGES.md present", repo.file_url("CHANGES.md"))]

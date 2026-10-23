@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily run of the Plugin Dashboard check (__APP__)
+
+[Timer]
+OnCalendar=__ON_CALENDAR__
+# Catch up after the server was off at the scheduled time.
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

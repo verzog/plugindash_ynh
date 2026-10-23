@@ -1,0 +1,72 @@
+#:schema https://raw.githubusercontent.com/YunoHost/apps/main/schemas/manifest.v2.schema.json
+
+packaging_format = 2
+
+id = "plugindash"
+name = "Plugin Dashboard"
+description.en = "Daily colour-coded health dashboard for your Moodle plugin repositories on GitHub and GitLab"
+
+version = "1.0.0~ynh1"
+
+maintainers = ["verzog"]
+
+[upstream]
+license = "GPL-3.0-or-later"
+code = "https://github.com/verzog/plugindash_ynh"
+
+[integration]
+yunohost = ">= 12.1.17"
+helpers_version = "2.1"
+architectures = "all"
+multi_instance = true
+ldap = "not_relevant"
+sso = "not_relevant"
+disk = "20M"
+ram.build = "50M"
+ram.runtime = "100M"
+
+[install]
+    [install.domain]
+    type = "domain"
+
+    [install.path]
+    type = "path"
+    default = "/plugins"
+
+    [install.init_main_permission]
+    help.en = "The dashboard lists your repositories, including private ones, so keep it restricted."
+    type = "group"
+    default = "admins"
+
+    [install.github_owners]
+    ask.en = "GitHub accounts or organisations to scan"
+    help.en = "Every Moodle plugin repo owned by these accounts is tracked. You add the GitHub token after installing, in the config panel."
+    type = "tags"
+    example = "verzog"
+
+    [install.timezone]
+    ask.en = "Time zone for dates and the daily check"
+    help.en = "An IANA name such as Australia/Brisbane or Europe/Paris."
+    type = "string"
+    default = "Australia/Brisbane"
+
+[resources]
+    [resources.system_user]
+
+    [resources.install_dir]
+    group = "www-data:r-x"
+
+    [resources.data_dir]
+
+    [resources.permissions]
+    main.url = "/"
+
+    # Prometheus can't log in through the SSO, so /metrics is let through SSOwat
+    # and restricted by IP address in nginx instead (config panel > Metrics).
+    metrics.url = "/metrics"
+    metrics.allowed = "visitors"
+    metrics.show_tile = false
+    metrics.protected = true
+
+    [resources.apt]
+    packages = "python3"

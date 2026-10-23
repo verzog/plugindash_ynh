@@ -1,0 +1,37 @@
+[Unit]
+Description=Plugin Dashboard: check Moodle plugin repositories (__APP__)
+Documentation=https://github.com/verzog/plugindash_ynh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__APP__
+Group=__APP__
+UMask=0027
+WorkingDirectory=__INSTALL_DIR__/app
+ExecStart=/usr/bin/python3 -I -B __INSTALL_DIR__/app/run.py --config __INSTALL_DIR__/config.json run
+TimeoutStartSec=30min
+Nice=10
+
+# Sandboxing: the collector only needs the network, its web root and its data folder.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=__INSTALL_DIR__/www __DATA_DIR__
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=

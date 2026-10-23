@@ -1,0 +1,29 @@
+#!/bin/bash
+
+#=================================================
+# IMPORT GENERIC HELPERS
+#=================================================
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+#=================================================
+# MODIFY URL IN NGINX CONF
+#=================================================
+ynh_script_progression "Updating the web server configuration..."
+
+metrics_allow_rules="$(plugindash_metrics_rules)"
+ynh_config_change_url_nginx
+
+#=================================================
+# UPDATE THE DASHBOARD LINK USED IN ALERTS
+#=================================================
+ynh_script_progression "Updating the link used in alerts..."
+
+plugindash_write_config
+
+#=================================================
+# END OF SCRIPT
+#=================================================
+
+ynh_script_progression "Change of URL completed for $app"

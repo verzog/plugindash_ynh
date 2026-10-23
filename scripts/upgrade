@@ -1,0 +1,53 @@
+#!/bin/bash
+
+#=================================================
+# IMPORT GENERIC HELPERS
+#=================================================
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+#=================================================
+# STOP THE TIMER WHILE UPGRADING
+#=================================================
+ynh_script_progression "Pausing the daily check..."
+
+systemctl stop "$app.timer" 2>/dev/null || true
+systemctl stop "$app.service" 2>/dev/null || true
+
+#=================================================
+# ENSURE DOWNWARD COMPATIBILITY
+#=================================================
+ynh_script_progression "Ensuring downward compatibility..."
+
+plugindash_set_defaults
+
+# ynh_app_setting_set_default also updates the variables, so every setting is now loaded.
+
+#=================================================
+# UPGRADE THE APP
+#=================================================
+ynh_script_progression "Upgrading the dashboard files..."
+
+plugindash_deploy_code
+
+#=================================================
+# UPDATE CONFIGURATION
+#=================================================
+ynh_script_progression "Updating the configuration..."
+
+plugindash_write_config
+
+#=================================================
+# SYSTEM CONFIGURATION
+#=================================================
+ynh_script_progression "Upgrading the web server and timer configuration..."
+
+plugindash_add_nginx
+plugindash_add_systemd
+
+#=================================================
+# END OF SCRIPT
+#=================================================
+
+ynh_script_progression "Upgrade of $app completed"
