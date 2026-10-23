@@ -274,6 +274,23 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(status["repos"][0]["status"], "amber")
         self.assertIn("No CHANGES.md", status["repos"][0]["summary"])
 
+    def test_extension_with_a_bad_level_does_not_stop_the_run(self):
+        folder = os.path.join(self.cfg["extensions_dir"], "checks")
+        os.makedirs(folder)
+        with open(os.path.join(folder, "typo.py"), "w") as handle:
+            handle.write(
+                "from plugindash.model import Finding\n"
+                "ID = 'typo'\nTITLE = 'Misspelt level'\n"
+                "def run(repo, plugin, ctx):\n"
+                "    return [Finding(ID, 'amberr', 'Oops')]\n"
+            )
+        repos = [healthy_repo("verzog/moodle-local_x", "local_x"), healthy_repo("verzog/moodle-local_y", "local_y")]
+        status = collect(self.cfg, sources=[FakeSource(repos)], directory=FakeDirectory(), now=NOW)
+        self.assertEqual(len(status["repos"]), 2)
+        finding = next(f for f in status["repos"][0]["findings"] if f["check"] == "typo")
+        self.assertEqual(finding["level"], "info")
+        self.assertIn("check error", finding["message"])
+
     def test_full_run_writes_outputs_and_alerts_on_change(self):
         sent = []
         folder = os.path.join(self.cfg["extensions_dir"], "notify")
