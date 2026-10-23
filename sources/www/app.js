@@ -44,7 +44,11 @@
     return a;
   }
 
-  function slug(name) { return 'repo-' + name.replace(/[^A-Za-z0-9_-]+/g, '-'); }
+  /* Reversible, so two repos can never share an id: letters, digits and '-' are kept, any other
+     character (including '_') becomes _<hex code>_. The result is still a valid CSS identifier. */
+  function slug(name) {
+    return 'repo-' + name.replace(/[^A-Za-z0-9-]/g, function (c) { return '_' + c.charCodeAt(0).toString(16) + '_'; });
+  }
 
   function relativeAge(iso) {
     var days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
