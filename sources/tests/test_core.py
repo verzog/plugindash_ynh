@@ -321,6 +321,37 @@ class RunnerTests(unittest.TestCase):
             history = json.load(handle)
         self.assertIn("verzog/moodle-local_x", history)
 
+    def test_alert_no_channel_delivered_is_retried(self):
+        folder = os.path.join(self.cfg["extensions_dir"], "notify")
+        os.makedirs(folder)
+        log_path = os.path.join(self.tmp.name, "sent.json")
+        flag = os.path.join(self.tmp.name, "channel_down")
+        with open(os.path.join(folder, "flaky.py"), "w") as handle:
+            handle.write(
+                "import json, os\nID = 'flaky'\n"
+                "def configured(cfg):\n    return True\n"
+                "def send(cfg, title, body, priority, url):\n"
+                f"    if os.path.exists({flag!r}):\n"
+                "        raise ConnectionError('channel down')\n"
+                f"    with open({log_path!r}, 'a') as out:\n"
+                "        out.write(json.dumps(body) + '\\n')\n"
+            )
+        healthy = healthy_repo("verzog/moodle-local_x", "local_x")
+        broken = healthy_repo("verzog/moodle-local_x", "local_x", runs={"1": failed_run("r7")},
+                              jobs={"r7": [Job("test (MOODLE_503_STABLE)", "failure")]})
+        run(self.cfg, sources=[FakeSource([healthy])], directory=FakeDirectory())
+        open(flag, "w").close()
+        status = run(self.cfg, sources=[FakeSource([broken])], directory=FakeDirectory())
+        self.assertIn("failed", status["alerts"]["flaky"])
+        self.assertFalse(os.path.exists(log_path))
+        os.remove(flag)  # The channel is back: the missed alert goes out on the next run.
+        run(self.cfg, sources=[FakeSource([broken])], directory=FakeDirectory())
+        run(self.cfg, sources=[FakeSource([broken])], directory=FakeDirectory())  # Then it isn't repeated.
+        with open(log_path) as handle:
+            sent = [json.loads(line) for line in handle]
+        self.assertEqual(len(sent), 1)
+        self.assertIn("green → red", sent[0])
+
     def test_fatal_run_keeps_previous_data(self):
         repo = healthy_repo("verzog/moodle-local_x", "local_x")
         run(self.cfg, sources=[FakeSource([repo])], directory=FakeDirectory(), send_alerts=False)

@@ -267,7 +267,7 @@ def run(cfg: dict[str, Any], send_alerts: bool = True, sources=None, directory=N
     www, data = cfg["www_dir"], cfg["data_dir"]
     history = History(os.path.join(data, "history.sqlite"))
     try:
-        previous = history.last_good_statuses()
+        previous = history.alert_baseline()
         try:
             status = collect(cfg, sources=sources, directory=directory, now=started)
         except FatalRunError as err:
@@ -299,9 +299,16 @@ def run(cfg: dict[str, Any], send_alerts: bool = True, sources=None, directory=N
 
         changes = changes_to_alert(previous, status["repos"], cfg["alert_on"])
         status["alerts"] = {}
+        baseline = {r["full_name"]: r["status"] for r in status["repos"]}
         if changes and send_alerts:
             title, body, priority = alert_text(changes)
             status["alerts"] = send_all(cfg, title, body, priority, cfg.get("public_url") or None)
+            if status["alerts"] and "sent" not in status["alerts"].values():
+                # Every channel failed: keep the old colours so the next run sends this alert again.
+                log.warning("No alert channel delivered; the alert will be retried on the next run")
+                for change in changes:
+                    baseline[change["repo"]["full_name"]] = change["old"]
+        history.set_alert_baseline(baseline)
         log.info(
             "Done: %d repos (%s) in %ss, %d API calls; %d alert-worthy changes",
             len(status["repos"]), ", ".join(f"{v} {k}" for k, v in status["counts"].items()),
