@@ -366,6 +366,39 @@ class RunnerTests(unittest.TestCase):
         self.assertIn("rejected", status["run"]["error"])
         self.assertEqual(len(status["repos"]), 1)  # Last good data still shown.
 
+    def test_check_the_token_cannot_run_is_amber(self):
+        def no_actions_permission():
+            from plugindash.http import AuthError
+            raise AuthError(403, "https://api.github.com/repos/verzog/moodle-local_x/actions/workflows", "")
+
+        repo = healthy_repo("verzog/moodle-local_x", "local_x")
+        repo.workflows = no_actions_permission
+        status = collect(self.cfg, sources=[FakeSource([repo])], directory=FakeDirectory(), now=NOW)
+        self.assertEqual(status["repos"][0]["status"], "amber")
+        self.assertIn("lacks permission", status["repos"][0]["summary"])
+
+    def test_check_the_token_cannot_run_ignores_severity_overrides(self):
+        def no_issues_permission():
+            from plugindash.http import AuthError
+            raise AuthError(403, "https://api.github.com/repos/verzog/moodle-local_x/issues", "")
+
+        self.cfg["severity_overrides"] = {"issues": "info"}
+        repo = healthy_repo("verzog/moodle-local_x", "local_x")
+        repo.open_issues = no_issues_permission
+        status = collect(self.cfg, sources=[FakeSource([repo])], directory=FakeDirectory(), now=NOW)
+        self.assertEqual(status["repos"][0]["status"], "amber")
+
+    def test_check_answered_with_404_is_amber(self):
+        def private_repo_without_issues_permission():
+            from plugindash.http import NotFound
+            raise NotFound(404, "https://api.github.com/repos/verzog/moodle-local_x/issues", "")
+
+        repo = healthy_repo("verzog/moodle-local_x", "local_x")
+        repo.open_issues = private_repo_without_issues_permission
+        status = collect(self.cfg, sources=[FakeSource([repo])], directory=FakeDirectory(), now=NOW)
+        self.assertEqual(status["repos"][0]["status"], "amber")
+        self.assertIn("404", status["repos"][0]["summary"])
+
     def test_repo_the_token_cannot_read_is_grey(self):
         repos = [healthy_repo("verzog/moodle-local_x", "local_x"), denied_repo("verzog/moodle-local_y")]
         status = collect(self.cfg, sources=[FakeSource(repos)], directory=FakeDirectory(), now=NOW)

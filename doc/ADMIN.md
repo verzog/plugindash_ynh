@@ -33,7 +33,7 @@ A Grafana alert on `time() - plugindash_last_run_timestamp_seconds > 2*86400` te
 ## Colours
 
 - **Red**: a check found something broken or inconsistent (CI failing on a supported branch, tag ≠ `version.php`, release zip missing, licence mismatch, critical/high security alert).
-- **Amber**: needs attention (open issues or PRs, unreleased commits, stale or disabled CI, only the Moodle `main` cell failing, a newer Moodle not supported, directory listing behind).
+- **Amber**: needs attention (open issues or PRs, unreleased commits, stale or disabled CI, only the Moodle `main` cell failing, a newer Moodle not supported, directory listing behind, or a check that couldn't run because the token lacks a permission).
 - **Green**: every check passed.
 - **Grey**: archived, or couldn't be read.
 

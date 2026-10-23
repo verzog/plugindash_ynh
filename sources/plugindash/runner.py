@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 from . import __version__
 from .checks import Context, load_checks
 from .history import History
-from .http import AuthError, HttpError
+from .http import AuthError, HttpError, NotFound
 from .model import AMBER, INFO, LEVEL_RANK, LEVELS, OK, RED, STATUS_RANK, Finding, worst_status
 from .moodle import Directory, branch_label, supported_range
 from .notify import send_all
@@ -40,7 +40,7 @@ def apply_overrides(findings: list[Finding], overrides: dict[str, str]) -> list[
     """Lets the config panel change how serious a check is, e.g. unreleased=info."""
     for finding in findings:
         level = overrides.get(finding.check)
-        if level in LEVELS and finding.level in (AMBER, RED):
+        if level in LEVELS and finding.level in (AMBER, RED) and finding.overridable:
             finding.level = level
     return findings
 
@@ -73,9 +73,19 @@ def check_repo(repo, checks, ctx: Context) -> dict[str, Any] | None:
                     if not isinstance(finding, Finding) or finding.level not in LEVELS:
                         raise ValueError(f"returned an invalid finding: {finding!r}")
                 findings.extend(results)
+            # Amber, not info, and not changed by severity overrides: a check that couldn't run
+            # must not let the repo look healthy.
             except AuthError as err:
                 findings.append(Finding(
-                    check.ID, INFO, f"{check.TITLE}: the token can't read this (HTTP {err.status})",
+                    check.ID, AMBER, f"{check.TITLE}: couldn't run, the token lacks permission (HTTP {err.status})",
+                    overridable=False,
+                ))
+            except NotFound:
+                # GitHub answers 404 rather than 403 when a fine-grained token lacks a permission
+                # on a private repo. Sources already turn the expected 404s (no file, no release) into None.
+                findings.append(Finding(
+                    check.ID, AMBER, f"{check.TITLE}: couldn't run, the server returned 404 "
+                    "(usually a missing token permission)", overridable=False,
                 ))
             except HttpError as err:
                 findings.append(Finding(check.ID, INFO, f"{check.TITLE}: couldn't fetch data ({err})"))
