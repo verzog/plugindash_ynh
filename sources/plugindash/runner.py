@@ -67,7 +67,12 @@ def check_repo(repo, checks, ctx: Context) -> dict[str, Any] | None:
     else:
         for check in checks:
             try:
-                findings.extend(check.run(repo, plugin, ctx) or [])
+                results = list(check.run(repo, plugin, ctx) or [])
+                # Catch a bad level here, inside this check's error handling; later it would stop the run.
+                for finding in results:
+                    if not isinstance(finding, Finding) or finding.level not in LEVELS:
+                        raise ValueError(f"returned an invalid finding: {finding!r}")
+                findings.extend(results)
             except AuthError as err:
                 findings.append(Finding(
                     check.ID, INFO, f"{check.TITLE}: the token can't read this (HTTP {err.status})",
