@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..model import AMBER, OK, RED, Finding
+from ..model import INFO, OK, RED, Finding
 from ..moodle import normalise_tag, release_text
 from ._util import version_at
 
@@ -15,7 +15,8 @@ ORDER = 20
 def run(repo, plugin, ctx):
     rel = repo.latest_release()
     if rel is None:
-        return [Finding(ID, AMBER, "No published releases yet", f"{repo.html_url}/releases")]
+        # Info, not amber: an unreleased plugin isn't unhealthy, and this fired on ~20 repos.
+        return [Finding(ID, INFO, "No published releases yet", f"{repo.html_url}/releases")]
     findings = []
     tagged = version_at(repo, rel.tag)
     tag_release = normalise_tag(rel.tag)
