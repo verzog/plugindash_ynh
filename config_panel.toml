@@ -45,7 +45,7 @@ services = []
         [main.github.github_owners]
         ask = "Accounts or organisations to scan"
         type = "tags"
-        help = "Every repository owned by these accounts that has a Moodle version.php is tracked."
+        help = "Just the account or organisation name, e.g. verzog — not the full profile URL. Every repository it owns that has a Moodle version.php is tracked."
 
         [main.github.include_forks]
         ask = "Include forks"

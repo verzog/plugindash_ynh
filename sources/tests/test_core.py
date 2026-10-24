@@ -41,6 +41,23 @@ def run_check(check_id, repo, context=None):
     return CHECKS[check_id].run(repo, plugin, context or ctx())
 
 
+class ConfigTests(unittest.TestCase):
+    def test_owner_names_are_reduced_to_the_bare_account(self):
+        cfg = config_mod.normalise({"github_owners": [
+            "verzog", "@verzog", "github.com/verzog",
+            "https://github.com/verzog", "https://github.com/verzog/",
+        ]})
+        self.assertEqual(cfg["github_owners"], ["verzog"] * 5)
+
+    def test_owner_names_accept_a_comma_separated_string(self):
+        cfg = config_mod.normalise({"github_owners": "https://github.com/verzog, otherorg"})
+        self.assertEqual(cfg["github_owners"], ["verzog", "otherorg"])
+
+    def test_empty_and_host_only_owner_values_are_dropped(self):
+        cfg = config_mod.normalise({"github_owners": "verzog, , https://github.com/"})
+        self.assertEqual(cfg["github_owners"], ["verzog"])
+
+
 class PhpParseTests(unittest.TestCase):
     def test_parses_fields_without_executing(self):
         src = version_php("local_x", "1.2.3", 2026101500)
