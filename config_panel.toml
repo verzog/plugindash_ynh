@@ -106,9 +106,9 @@ services = []
 
         [main.checks.ci_ignore_workflows]
         ask = "Workflows that aren't CI"
-        type = "tags"
+        type = "string"
         optional = true
-        help = "Workflow file names or display names to skip in the CI checks, e.g. release.yml or 'Publish a tag to Moodle Marketplace'."
+        help = "Comma-separated workflow file names or display names to skip in the CI checks, e.g. release.yml, Dependabot Updates, Publish a tag to Moodle Marketplace. A plain text box (not tags), so multi-word workflow names stay intact."
 
     [main.schedule]
     name = "Schedule"
