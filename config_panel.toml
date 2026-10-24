@@ -108,7 +108,7 @@ services = []
         ask = "Workflows that aren't CI"
         type = "tags"
         optional = true
-        help = "Workflow file names to skip in the CI checks, such as release.yml."
+        help = "Workflow file names or display names to skip in the CI checks, e.g. release.yml or 'Publish a tag to Moodle Marketplace'."
 
     [main.schedule]
     name = "Schedule"

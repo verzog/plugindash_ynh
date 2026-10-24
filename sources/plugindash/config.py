@@ -30,7 +30,8 @@ DEFAULTS: dict[str, Any] = {
     "disabled_checks": [],
     "severity_overrides": {},        # e.g. {"unreleased": "info"}
     "stale_days": 30,
-    "ci_ignore_workflows": ["release.yml"],
+    # "Dependabot Updates" is GitHub's own bot workflow, never the plugin's test CI.
+    "ci_ignore_workflows": ["release.yml", "Dependabot Updates"],
     "moodle_latest_branch": 0,      # 0 = look it up from moodle/moodle on GitHub.
     "directory_api": "https://download.moodle.org/api/1.3/pluginfo.php",
     # Alerts.

@@ -41,23 +41,6 @@ def run_check(check_id, repo, context=None):
     return CHECKS[check_id].run(repo, plugin, context or ctx())
 
 
-class ConfigTests(unittest.TestCase):
-    def test_owner_names_are_reduced_to_the_bare_account(self):
-        cfg = config_mod.normalise({"github_owners": [
-            "verzog", "@verzog", "github.com/verzog",
-            "https://github.com/verzog", "https://github.com/verzog/",
-        ]})
-        self.assertEqual(cfg["github_owners"], ["verzog"] * 5)
-
-    def test_owner_names_accept_a_comma_separated_string(self):
-        cfg = config_mod.normalise({"github_owners": "https://github.com/verzog, otherorg"})
-        self.assertEqual(cfg["github_owners"], ["verzog", "otherorg"])
-
-    def test_empty_and_host_only_owner_values_are_dropped(self):
-        cfg = config_mod.normalise({"github_owners": "verzog, , https://github.com/"})
-        self.assertEqual(cfg["github_owners"], ["verzog"])
-
-
 class PhpParseTests(unittest.TestCase):
     def test_parses_fields_without_executing(self):
         src = version_php("local_x", "1.2.3", 2026101500)
@@ -151,6 +134,15 @@ class CheckTests(unittest.TestCase):
         repo = healthy_repo("v/r", "local_x", "1.3.0")
         repo._tag_files["v1.3.0"]["version.php"] = version_php("local_x", "1.2.9")
         self.assertIn(RED, levels(run_check("release_match", repo)))
+
+    def test_tag_mismatch_message_shows_the_normalised_tag(self):
+        repo = healthy_repo("v/r", "local_x", "1.3.0")
+        repo._tag_files["v1.3.0"]["version.php"] = version_php("local_x", "v1.3.0")
+        findings = run_check("release_match", repo)
+        self.assertIn(RED, levels(findings))
+        message = next(f.message for f in findings if f.level == RED)
+        self.assertIn("'1.3.0'", message)   # What the tag expects.
+        self.assertIn("'v1.3.0'", message)  # What is actually in version.php.
 
     def test_main_bumped_ahead_of_tag_is_fine(self):
         repo = healthy_repo("v/r", "local_x", "1.3.0")
@@ -483,6 +475,25 @@ class ConfigTests(unittest.TestCase):
         self.assertFalse(cfg["include_forks"])
         self.assertEqual(cfg["stale_days"], 30)
         self.assertEqual(cfg["alert_on"], "worse")
+
+    def test_owner_names_are_reduced_to_the_bare_account(self):
+        cfg = config_mod.normalise({"github_owners": [
+            "verzog", "@verzog", "github.com/verzog",
+            "https://github.com/verzog", "https://github.com/verzog/",
+        ]})
+        self.assertEqual(cfg["github_owners"], ["verzog"] * 5)
+
+    def test_owner_names_accept_a_comma_separated_string(self):
+        cfg = config_mod.normalise({"github_owners": "https://github.com/verzog, otherorg"})
+        self.assertEqual(cfg["github_owners"], ["verzog", "otherorg"])
+
+    def test_empty_and_host_only_owner_values_are_dropped(self):
+        cfg = config_mod.normalise({"github_owners": "verzog, , https://github.com/"})
+        self.assertEqual(cfg["github_owners"], ["verzog"])
+
+    def test_dependabot_workflow_is_ignored_by_default(self):
+        cfg = config_mod.normalise({})
+        self.assertIn("Dependabot Updates", cfg["ci_ignore_workflows"])
 
 
 if __name__ == "__main__":

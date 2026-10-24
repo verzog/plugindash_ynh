@@ -24,8 +24,12 @@ def run(repo, plugin, ctx):
         return findings
     at_tag = release_text(tagged.get("release"))
     if at_tag != tag_release:
+        # Show the normalised tag (its 'v' stripped) so a stray 'v' or a "(Build …)"
+        # suffix in $plugin->release is visible, not a baffling "v1.3.0 != 'v1.3.0'".
         findings.append(Finding(
-            ID, RED, f"Tag {rel.tag} doesn't match $plugin->release '{at_tag or 'missing'}' in that release",
+            ID, RED,
+            f"Tag {rel.tag} expects $plugin->release '{tag_release}', "
+            f"but it's '{at_tag or 'missing'}' in that release",
             rel.url,
         ))
     else:
