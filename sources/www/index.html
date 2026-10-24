@@ -22,10 +22,16 @@
 
   <nav class="filters" aria-label="Filter plugins">
     <div class="segments" id="segments" role="group"></div>
-    <label class="search">
-      <span class="visually-hidden">Search plugins</span>
-      <input type="search" id="search" placeholder="Search by name or component" autocomplete="off">
-    </label>
+    <div class="tools">
+      <label class="search">
+        <span class="visually-hidden">Search plugins</span>
+        <input type="search" id="search" placeholder="Search by name or component" autocomplete="off">
+      </label>
+      <div class="exports" role="group" aria-label="Export the shown plugins">
+        <button class="export" type="button" id="export-csv">Export CSV</button>
+        <button class="export" type="button" id="export-pdf">Export PDF</button>
+      </div>
+    </div>
   </nav>
 
   <main id="list" class="list" aria-live="polite"></main>

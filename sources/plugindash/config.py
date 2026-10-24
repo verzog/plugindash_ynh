@@ -30,7 +30,8 @@ DEFAULTS: dict[str, Any] = {
     "disabled_checks": [],
     "severity_overrides": {},        # e.g. {"unreleased": "info"}
     "stale_days": 30,
-    "ci_ignore_workflows": ["release.yml"],
+    # "Dependabot Updates" is GitHub's own bot workflow, never the plugin's test CI.
+    "ci_ignore_workflows": ["release.yml", "Dependabot Updates"],
     "moodle_latest_branch": 0,      # 0 = look it up from moodle/moodle on GitHub.
     "directory_api": "https://download.moodle.org/api/1.3/pluginfo.php",
     # Alerts.
@@ -61,6 +62,27 @@ def _as_list(value: Any) -> list[str]:
     return [str(i).strip() for i in items if str(i).strip()]
 
 
+def _owner_name(value: Any) -> str:
+    """Reduce a pasted profile URL or @handle to the bare account name.
+
+    'verzog', '@verzog', 'github.com/verzog' and 'https://github.com/verzog/' all
+    become 'verzog'. A GitHub account name has no dots, so a leftover host such as
+    'github.com' is dropped by the caller.
+    """
+    text = str(value).strip()
+    for sep in ("?", "#"):
+        text = text.split(sep, 1)[0]
+    if "://" in text:
+        text = text.split("://", 1)[1]
+    text = text.strip().strip("/")
+    segments = [s for s in text.split("/") if s]
+    # A URL such as github.com/verzog leaves a host segment first; drop it.
+    if len(segments) > 1 and "." in segments[0]:
+        segments = segments[1:]
+    name = segments[0] if segments else ""
+    return name.lstrip("@").strip()
+
+
 def _as_overrides(value: Any) -> dict[str, str]:
     """Accepts {"id": "level"} or ["id=level", ...] or "id=level,id2=level"."""
     if isinstance(value, dict):
@@ -84,6 +106,10 @@ def normalise(raw: dict[str, Any]) -> dict[str, Any]:
     cfg.update({k: v for k, v in raw.items() if v is not None})
     for key in LIST_KEYS:
         cfg[key] = _as_list(cfg[key])
+    # Forgive a pasted profile URL or @handle; a real account name has no dots.
+    cfg["github_owners"] = [
+        name for name in (_owner_name(o) for o in cfg["github_owners"]) if name and "." not in name
+    ]
     cfg["exclude_repos"] = [r.lower() for r in cfg["exclude_repos"]]
     cfg["severity_overrides"] = _as_overrides(cfg["severity_overrides"])
     for key in ("github_enabled", "gitlab_enabled", "include_forks"):

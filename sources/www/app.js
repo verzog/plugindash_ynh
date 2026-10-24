@@ -227,10 +227,73 @@
     }
   }
 
+  /* The plugins currently shown, so an export matches the filter and search on screen. */
+  function shownRepos() {
+    return state.status ? state.status.repos.filter(matches) : [];
+  }
+
+  function dateStamp() {
+    var d = new Date();
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function csvCell(value) {
+    var text = value === null || value === undefined ? '' : String(value);
+    return /[",\n\r]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+  }
+
+  function downloadFile(name, type, text) {
+    var blob = new Blob([text], {type: type});
+    var url = URL.createObjectURL(blob);
+    var a = el('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+  }
+
+  function exportCsv() {
+    var headers = ['Repository', 'Component', 'Status', 'Summary', 'Release',
+      'Supported Moodle', 'Open issues', 'Open PRs', 'Last push', 'URL'];
+    var lines = [headers.map(csvCell).join(',')];
+    shownRepos().forEach(function (repo) {
+      lines.push([
+        repo.full_name,
+        repo.component || repo.name,
+        LABELS[repo.status],
+        repo.summary,
+        repo.archived ? '' : (repo.latest_tag || 'no release'),
+        repo.supported ? repo.supported[0] + '–' + repo.supported[1] : '',
+        repo.open_issues,
+        repo.open_prs,
+        repo.pushed_at || '',
+        repo.url
+      ].map(csvCell).join(','));
+    });
+    // A BOM (﻿) so Excel reads the UTF-8 (accented names) correctly.
+    downloadFile('plugin-dashboard-' + dateStamp() + '.csv', 'text/csv;charset=utf-8',
+      '﻿' + lines.join('\r\n') + '\r\n');
+  }
+
+  function exportPdf() {
+    // The print stylesheet expands every row's findings, so just open the print dialog
+    // (where the browser offers "Save as PDF"). The on-screen view is left untouched.
+    window.print();
+  }
+
   function load(url) {
     return fetch(url, {cache: 'no-store', credentials: 'same-origin'}).then(function (r) {
       if (!r.ok) { throw new Error(url + ' returned ' + r.status); }
       return r.json();
+    });
+  }
+
+  function setExportsEnabled(enabled) {
+    ['export-csv', 'export-pdf'].forEach(function (id) {
+      document.getElementById(id).disabled = !enabled;
     });
   }
 
@@ -240,6 +303,9 @@
       state.query = e.target.value.trim();
       renderList();
     });
+    setExportsEnabled(false);
+    document.getElementById('export-csv').addEventListener('click', exportCsv);
+    document.getElementById('export-pdf').addEventListener('click', exportPdf);
     load('status.json').then(function (status) {
       state.status = status;
       if (state.filter !== 'all' && !(status.counts || {})[state.filter]) { state.filter = 'all'; }
@@ -250,6 +316,7 @@
       renderSegments();
       renderList();
       renderAbout();
+      setExportsEnabled((state.status.repos || []).length > 0);
       if (location.hash) {
         var row = document.querySelector(location.hash.replace(/[^#A-Za-z0-9_-]/g, ''));
         if (row) { row.scrollIntoView(); }

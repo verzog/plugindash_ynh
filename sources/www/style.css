@@ -118,6 +118,22 @@ h1 { font-size: 1.75rem; line-height: 1.2; margin: 0; letter-spacing: -0.01em; }
 }
 .search { flex: 0 1 320px; }
 
+.tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.exports { display: flex; gap: 6px; }
+.export {
+  font: inherit;
+  font-size: 0.9375rem;
+  padding: 6px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.export:hover { border-color: var(--focus); color: var(--focus); }
+.export:disabled { opacity: 0.5; cursor: default; }
+.export:disabled:hover { border-color: var(--rule); color: var(--ink); }
+
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--grey); flex: none; }
 .dot.red { background: var(--red); }
 .dot.amber { background: var(--amber); }
@@ -214,4 +230,18 @@ h1 { font-size: 1.75rem; line-height: 1.2; margin: 0; letter-spacing: -0.01em; }
 
 @media (prefers-reduced-motion: reduce) {
   .rack a:hover { transform: none; }
+}
+
+/* Print / "Export PDF": a flat, ink-friendly report with every finding shown. */
+@media print {
+  :root { color-scheme: light; }
+  body { background: #fff; color: #000; }
+  .page { max-width: none; padding: 0; }
+  .filters, .banner, .about { display: none !important; }
+  .rack a { height: 24px; }
+  .row { break-inside: avoid; border: 1px solid #999; margin-bottom: 4px; }
+  .row-head { cursor: default; }
+  .ticks { display: none; }
+  .detail { display: block !important; }
+  a { color: #000; text-decoration: underline; }
 }
