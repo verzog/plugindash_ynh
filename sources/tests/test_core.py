@@ -154,9 +154,10 @@ class CheckTests(unittest.TestCase):
         repo._files["version.php"] = version_php("local_x", "1.3.0", 2025010100)
         self.assertIn(RED, levels(run_check("release_match", repo)))
 
-    def test_no_release_is_amber(self):
+    def test_no_release_is_info(self):
+        # An unreleased plugin isn't unhealthy, so it stays green (info, not amber).
         repo = healthy_repo("v/r", "local_x", release=None)
-        self.assertEqual(levels(run_check("release_match", repo)), [AMBER])
+        self.assertEqual(levels(run_check("release_match", repo)), [INFO])
         self.assertEqual(run_check("release_zip", repo), [])
         self.assertEqual(run_check("unreleased", repo), [])
 
