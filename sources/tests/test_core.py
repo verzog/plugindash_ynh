@@ -434,6 +434,18 @@ class LangStringsTests(unittest.TestCase):
             self.assertIn(expected, message)
         self.assertNotIn("size", message)
 
+    def test_comments_are_ignored_and_multiline_values_read_whole(self):
+        repo = healthy_repo("v/r", "local_x")
+        repo._files["lang/en/local_x.php"] = (
+            "<?php\n/* $string['z'] = 'Old'; */\n"
+            "$string['a'] = 'Colour'; // Replaces color.\n"
+            "# $string['a'] = 'Dupe';\n"
+            "$string['b'] = 'Semi; colon';\n"
+        )
+        self.assertEqual(levels(run_check("lang_strings", repo)), [OK])
+        repo._files["lang/en/local_x.php"] = "<?php\n$string['a'] = 'Choose a\ncolor' .\n    ' and size';\n"
+        self.assertIn("color (colour)", run_check("lang_strings", repo)[0].message)
+
     def test_activity_modules_drop_the_mod_prefix(self):
         self.assertEqual(lang_file("mod_forum"), "lang/en/forum.php")
         self.assertEqual(levels(run_check("lang_strings", healthy_repo("v/r", "mod_board"))), [OK])
