@@ -88,8 +88,8 @@ On the server:
 - Units: `plugindash.timer` → `plugindash.service` (the daily run), and `plugindash-run.service` (always on).
 
 Check IDs: `ci_status`, `ci_activity`, `release_match`, `release_zip`, `unreleased`, `issues`,
-`moodle_support`, `moodle_baseline`, `ci_setup`, `licence`, `licence_mode`, `repo_files`, `security_alerts`,
-`plugins_directory`.
+`moodle_support`, `moodle_baseline`, `ci_setup`, `licence`, `licence_mode`, `repo_files`, `lang_strings`,
+`security_alerts`, `plugins_directory`.
 
 `moodle_baseline` and `ci_setup` hold plugins to the conventions in Verzog's Moodle plugin CLAUDE.md. The
 supported range is two config panel settings, `moodle_min_branch` / `moodle_max_branch` ("5.1" / "5.3"),
@@ -100,6 +100,8 @@ GitLab repos only get the TZ and warning-flag rules.
 
 `repo_files` checks the boilerplate sniff against the mode (SCCA must exclude it, red; GPL must keep it,
 amber), the `@copyright` holder (skipped for forks), `.gitattributes` and `classes/privacy/provider.php`.
+`lang_strings` reads `lang/en/<component>.php` (`mod_` plugins drop the prefix): C-order keys, no repeats,
+and a fixed list of US spellings (whole words; `-ize` stems listed one by one, so "size" isn't caught).
 
 Licence modes (`modes.py`, from the `@license` tag; shown as a tag on each row):
 

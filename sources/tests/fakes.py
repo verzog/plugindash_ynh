@@ -195,6 +195,11 @@ def release(tag, component, assets=True, days_ago=20):
                    [{"name": n, "url": f"https://example/{n}"} for n in names])
 
 
+def lang_file_text(component, strings=None):
+    strings = strings or {"pluginname": component, "privacy:metadata": "Stores no personal data."}
+    return "<?php\n" + "".join(f"$string['{k}'] = '{v}';\n" for k, v in strings.items())
+
+
 def healthy_repo(full_name, component, rel="1.3.0", version=2026100100, **overrides):
     files = {
         "version.php": version_php(component, rel, version),
@@ -203,6 +208,7 @@ def healthy_repo(full_name, component, rel="1.3.0", version=2026100100, **overri
         ".github/workflows/moodle-ci.yml": CI_YAML,
         ".gitattributes": GITATTRIBUTES,
         "classes/privacy/provider.php": "<?php\n",
+        f"lang/en/{component[4:] if component.startswith('mod_') else component}.php": lang_file_text(component),
     }
     tag = f"v{rel}"
     params = dict(

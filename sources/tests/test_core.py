@@ -14,12 +14,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fakes import (  # noqa: E402
     CI_YAML, NOW, SCCA_PHPCS, SCCA_TAG, DeniedRepo, FakeDirectory, FakeRepo, FakeSource, denied_repo, failed_run,
-    healthy_repo, ok_run, release, sample_directory, sample_repos, version_php,
+    healthy_repo, lang_file_text, ok_run, release, sample_directory, sample_repos, version_php,
 )
 from plugindash import config as config_mod  # noqa: E402
 from plugindash.checks import Context, load_checks  # noqa: E402
 from plugindash.model import AMBER, INFO, OK, RED, Job, SecurityAlert, Workflow  # noqa: E402
 from plugindash.checks._ci import matrix_cells  # noqa: E402
+from plugindash.checks.lang_strings import lang_file  # noqa: E402
 from plugindash.modes import MODE_A, MODE_B, mode_label, plugin_mode  # noqa: E402
 from plugindash.moodle import branch_label, normalise_tag, version_key  # noqa: E402
 from plugindash.output import prometheus  # noqa: E402
@@ -405,6 +406,37 @@ class RepoFilesTests(unittest.TestCase):
         messages = " | ".join(f.message for f in run_check("repo_files", bare))
         self.assertIn("No .gitattributes", messages)
         self.assertIn("No Privacy API provider", messages)
+
+
+class LangStringsTests(unittest.TestCase):
+    def test_sorted_australian_strings_are_ok(self):
+        self.assertEqual(levels(run_check("lang_strings", healthy_repo("v/r", "local_x"))), [OK])
+
+    def test_missing_unsorted_and_repeated(self):
+        repo = healthy_repo("v/r", "local_x")
+        del repo._files["lang/en/local_x.php"]
+        self.assertIn("No language file (lang/en/local_x.php)", run_check("lang_strings", repo)[0].message)
+        repo._files["lang/en/local_x.php"] = lang_file_text("local_x", {"zeta": "Z", "alpha": "A"})
+        self.assertIn("'alpha' comes after 'zeta'", run_check("lang_strings", repo)[0].message)
+        # C order puts capitals and ':' before lower case, unlike a dictionary sort.
+        repo._files["lang/en/local_x.php"] = lang_file_text("local_x", {"Zed": "Z", "a:b": "x", "ab": "y"})
+        self.assertEqual(levels(run_check("lang_strings", repo)), [OK])
+        repo._files["lang/en/local_x.php"] = "<?php\n$string['a'] = 'x';\n$string['a'] = 'y';\n"
+        self.assertIn("Repeated language string keys: a", run_check("lang_strings", repo)[0].message)
+
+    def test_us_spellings(self):
+        repo = healthy_repo("v/r", "local_x")
+        repo._files["lang/en/local_x.php"] = lang_file_text("local_x", {
+            "a": "Customize the color of {$a->color}", "b": "Course enrollment behavior", "c": "Pick a size",
+        })
+        message = run_check("lang_strings", repo)[0].message
+        for expected in ("customize (customise)", "color (colour)", "enrollment (enrolment)", "behavior (behaviour)"):
+            self.assertIn(expected, message)
+        self.assertNotIn("size", message)
+
+    def test_activity_modules_drop_the_mod_prefix(self):
+        self.assertEqual(lang_file("mod_forum"), "lang/en/forum.php")
+        self.assertEqual(levels(run_check("lang_strings", healthy_repo("v/r", "mod_board"))), [OK])
 
 
 class RunnerTests(unittest.TestCase):
