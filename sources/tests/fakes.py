@@ -14,6 +14,8 @@ GPL_TAG = "http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later"
 SCCA_TAG = "Proprietary — Skin Cancer College Australasia, all rights reserved"
 GPL3_TEXT = "                    GNU GENERAL PUBLIC LICENSE\n                       Version 3, 29 June 2007\n"
 MIT_TEXT = "MIT License\n\nCopyright (c) 2024\n\nPermission is hereby granted, free of charge, ...\n"
+GITATTRIBUTES = "* text=auto eol=lf\n/.github export-ignore\n/tests export-ignore\n/.gitattributes export-ignore\n"
+SCCA_PHPCS = '<ruleset name="P"><rule ref="moodle"><exclude name="moodle.Files.BoilerplateComment"/></rule></ruleset>\n'
 CI_YAML = """
 env:
   TZ: Australia/Sydney
@@ -44,13 +46,15 @@ jobs:
 
 
 def version_php(component, release, version=2026100100, supported="[501, 503]", license_tag=GPL_TAG,
-                requires=2025100600):
+                requires=2025100600, copyright=None):
+    if copyright is None:
+        copyright = "© Skin Cancer College Australasia" if license_tag == SCCA_TAG else "2026 Vernon Spain"
     supported_line = f"$plugin->supported = {supported};\n" if supported else ""
     requires_line = f"$plugin->requires = {requires};\n" if requires else ""
     return (
         "<?php\n" + GPL_HEADER +
         "/**\n * Version details.\n *\n"
-        f" * @package    {component}\n * @copyright  2026 Vernon Spain\n * @license    {license_tag}\n */\n\n"
+        f" * @package    {component}\n * @copyright  {copyright}\n * @license    {license_tag}\n */\n\n"
         "defined('MOODLE_INTERNAL') || die();\n\n"
         f"$plugin->component = '{component}'; // Full name.\n"
         f"$plugin->version = {version};\n"
@@ -197,6 +201,8 @@ def healthy_repo(full_name, component, rel="1.3.0", version=2026100100, **overri
         "LICENSE": GPL3_TEXT,
         "README.md": f"# {component}\n\n## License\n\nGNU GPL v3 or later.\n",
         ".github/workflows/moodle-ci.yml": CI_YAML,
+        ".gitattributes": GITATTRIBUTES,
+        "classes/privacy/provider.php": "<?php\n",
     }
     tag = f"v{rel}"
     params = dict(
@@ -261,6 +267,7 @@ def sample_repos():
     r._tag_files["v0.13.0"]["version.php"] = r._files["version.php"]
     r._files["LICENSE"] = "Copyright (c) Skin Cancer College Australasia.\nAll rights reserved.\n"
     r._files["README.md"] = "# Image extractor\n\n## Licence\n\nProprietary. All rights reserved.\n"
+    r._files[".phpcs.xml"] = SCCA_PHPCS
     repos.append(r)
 
     # Grey: archived.

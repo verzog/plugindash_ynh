@@ -6,7 +6,7 @@ id = "plugindash"
 name = "Plugin Dashboard"
 description.en = "Daily colour-coded health dashboard for your Moodle plugin repositories on GitHub and GitLab"
 
-version = "1.4.0~ynh1"
+version = "1.5.0~ynh1"
 
 maintainers = ["verzog"]
 
