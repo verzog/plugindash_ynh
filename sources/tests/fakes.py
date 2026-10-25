@@ -15,14 +15,31 @@ SCCA_TAG = "Proprietary — Skin Cancer College Australasia, all rights reserved
 GPL3_TEXT = "                    GNU GENERAL PUBLIC LICENSE\n                       Version 3, 29 June 2007\n"
 MIT_TEXT = "MIT License\n\nCopyright (c) 2024\n\nPermission is hereby granted, free of charge, ...\n"
 CI_YAML = """
+env:
+  TZ: Australia/Sydney
 jobs:
   test:
+    continue-on-error: ${{ matrix.moodle-branch == 'main' }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - {moodle-branch: 'MOODLE_501_STABLE', php: '8.2', database: 'pgsql'}
+          - {moodle-branch: 'MOODLE_502_STABLE', php: '8.3', database: 'pgsql'}
           - {moodle-branch: 'MOODLE_503_STABLE', php: '8.4', database: 'mariadb'}
-          - {moodle-branch: 'main', php: '8.4', database: 'pgsql'}
+          - {moodle-branch: 'main', php: '8.4', database: 'pgsql'}  # Next version; allowed to fail.
+    steps:
+      - name: PHP Code Sniffer
+        run: moodle-plugin-ci phpcs --max-warnings 0
+      - name: PHPDoc checker
+        run: moodle-plugin-ci phpdoc --max-warnings 0
+      - name: Grunt
+        if: ${{ !cancelled() && matrix.moodle-branch == 'MOODLE_501_STABLE' }}
+        run: moodle-plugin-ci grunt --max-lint-warnings 0
+      - name: PHPUnit tests
+        run: moodle-plugin-ci phpunit --fail-on-warning
+      - name: Behat features
+        run: moodle-plugin-ci behat --auto-rerun 3
 """
 
 

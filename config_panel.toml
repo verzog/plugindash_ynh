@@ -104,6 +104,20 @@ services = []
         min = 1
         max = 365
 
+        [main.checks.moodle_min_branch]
+        ask = "Lowest supported Moodle"
+        type = "string"
+        pattern.regexp = '^[0-9]+\.[0-9]+$'
+        pattern.error = "A Moodle branch such as 5.1"
+        help = "Plugins must not require or support anything older, and CI must test it. Grunt is expected to run on this branch only."
+
+        [main.checks.moodle_max_branch]
+        ask = "Highest supported Moodle"
+        type = "string"
+        pattern.regexp = '^[0-9]+\.[0-9]+$'
+        pattern.error = "A Moodle branch such as 5.3"
+        help = "CI must test this branch. Raise it when a new Moodle release joins your supported range."
+
         [main.checks.ci_ignore_workflows]
         ask = "Workflows that aren't CI"
         type = "string"
