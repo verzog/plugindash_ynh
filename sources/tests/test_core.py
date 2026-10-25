@@ -244,6 +244,21 @@ class RunnerTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_run_skips_when_another_run_holds_the_lock(self):
+        import fcntl
+        os.makedirs(self.cfg["data_dir"], exist_ok=True)
+        os.makedirs(self.cfg["www_dir"], exist_ok=True)
+        held = open(os.path.join(self.cfg["data_dir"], "run.lock"), "w")
+        fcntl.flock(held, fcntl.LOCK_EX)
+        try:
+            status = run(self.cfg, send_alerts=False,
+                         sources=[FakeSource(sample_repos())], directory=sample_directory())
+        finally:
+            fcntl.flock(held, fcntl.LOCK_UN)
+            held.close()
+        self.assertFalse(status["run"]["ok"])
+        self.assertEqual(status["repos"], [])
+
     def test_sample_run_colours(self):
         status = collect(self.cfg, sources=[FakeSource(sample_repos())], directory=sample_directory(), now=NOW)
         by_name = {r["name"]: r["status"] for r in status["repos"]}
@@ -495,6 +510,39 @@ class ConfigTests(unittest.TestCase):
     def test_dependabot_workflow_is_ignored_by_default(self):
         cfg = config_mod.normalise({})
         self.assertIn("Dependabot Updates", cfg["ci_ignore_workflows"])
+
+
+class ServeRunTests(unittest.TestCase):
+    def test_run_endpoint(self):
+        import threading
+        import urllib.error
+        import urllib.request
+        from http.server import ThreadingHTTPServer
+
+        from plugindash import runserver
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        called = []
+        handler = runserver.make_handler({"data_dir": tmp.name}, lambda: called.append(1))
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+
+        def get(path, method="GET"):
+            req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method)
+            with urllib.request.urlopen(req, timeout=5) as response:
+                return response.status, json.load(response)
+
+        status, body = get("/run", method="POST")
+        self.assertEqual((status, body.get("started")), (200, True))
+        self.assertEqual(called, [1])
+        self.assertEqual(get("/healthz")[1], {"ok": True})
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            get("/nope")
+        self.assertEqual(caught.exception.code, 404)
 
 
 if __name__ == "__main__":

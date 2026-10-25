@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import logging
 import os
@@ -273,6 +274,35 @@ def alert_text(changes: list[dict[str, Any]]) -> tuple[str, str, str]:
 
 
 def run(cfg: dict[str, Any], send_alerts: bool = True, sources=None, directory=None) -> dict[str, Any]:
+    """Collect and write the dashboard, guarded by a lock so the daily timer and the
+    on-demand 'Run check now' button never collect at the same time."""
+    data = cfg["data_dir"]
+    os.makedirs(data, exist_ok=True)
+    lock = open(os.path.join(data, "run.lock"), "w")  # noqa: SIM115
+    try:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            log.warning("Another run is already in progress; skipping this one.")
+            return _skipped_status(cfg)
+        return _run(cfg, send_alerts=send_alerts, sources=sources, directory=directory)
+    finally:
+        lock.close()
+
+
+def _skipped_status(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Returned when a run is skipped because another is in progress: keep the page as-is."""
+    previous = _load(os.path.join(cfg["www_dir"], "status.json"))
+    if previous is not None:
+        return previous
+    return {
+        "repos": [], "counts": {"red": 0, "amber": 0, "green": 0, "grey": 0}, "checks": [],
+        "moodle": {}, "timezone": cfg.get("timezone"), "app_version": __version__,
+        "run": {"ok": False, "error": "another run is already in progress"},
+    }
+
+
+def _run(cfg: dict[str, Any], send_alerts: bool = True, sources=None, directory=None) -> dict[str, Any]:
     started = datetime.now(timezone.utc)
     www, data = cfg["www_dir"], cfg["data_dir"]
     history = History(os.path.join(data, "history.sqlite"))

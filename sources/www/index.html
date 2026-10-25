@@ -26,6 +26,10 @@
   <nav class="filters" aria-label="Filter plugins">
     <div class="segments" id="segments" role="group"></div>
     <div class="tools">
+      <div class="run-group">
+        <button class="run" type="button" id="run-now">Run check now</button>
+        <span class="run-status" id="run-status" role="status" aria-live="polite"></span>
+      </div>
       <label class="search">
         <span class="visually-hidden">Search plugins</span>
         <input type="search" id="search" placeholder="Search by name or component" autocomplete="off">

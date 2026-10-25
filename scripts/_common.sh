@@ -137,23 +137,31 @@ plugindash_add_nginx() {
     ynh_config_add_nginx
 }
 
-# The collector is a oneshot service started by a daily timer.
+# The collector is a oneshot service started by a daily timer. A second, always-on
+# service (plugindash-run) is the localhost endpoint behind the "Run check now" button.
 plugindash_add_systemd() {
     on_calendar="*-*-* ${run_time}:00 ${timezone}"
     # Not ynh_config_add_systemd: that would `enable` the service itself, which has no
     # [Install] section on purpose (only the timer should start it).
     ynh_config_add --template="systemd.service" --destination="/etc/systemd/system/$app.service"
     ynh_config_add --template="systemd.timer" --destination="/etc/systemd/system/$app.timer"
+    ynh_config_add --template="systemd-run.service" --destination="/etc/systemd/system/$app-run.service"
     systemctl daemon-reload
     systemctl enable "$app.timer" --quiet
     # Restart so a changed schedule takes effect straight away.
     systemctl restart "$app.timer"
+    systemctl enable "$app-run.service" --quiet
+    systemctl restart "$app-run.service"
 }
 
 plugindash_remove_systemd() {
     if [ -e "/etc/systemd/system/$app.timer" ]; then
         systemctl disable --now "$app.timer" --quiet || true
         ynh_safe_rm "/etc/systemd/system/$app.timer"
+    fi
+    if [ -e "/etc/systemd/system/$app-run.service" ]; then
+        systemctl disable --now "$app-run.service" --quiet || true
+        ynh_safe_rm "/etc/systemd/system/$app-run.service"
     fi
     ynh_config_remove_systemd
     systemctl daemon-reload

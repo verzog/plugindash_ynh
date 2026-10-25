@@ -26,8 +26,10 @@ ynh_script_progression "Restoring the web server and daily timer configuration..
 ynh_restore "/etc/nginx/conf.d/$domain.d/$app.conf"
 ynh_restore "/etc/systemd/system/$app.service"
 ynh_restore "/etc/systemd/system/$app.timer"
+ynh_restore "/etc/systemd/system/$app-run.service"
 systemctl daemon-reload
 systemctl enable --now "$app.timer" --quiet
+systemctl enable --now "$app-run.service" --quiet
 
 ynh_systemctl --service=nginx --action=reload
 

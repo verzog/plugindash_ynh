@@ -136,6 +136,22 @@ h1 { font-size: 1.75rem; line-height: 1.2; margin: 0; letter-spacing: -0.01em; }
 .export:disabled { opacity: 0.5; cursor: default; }
 .export:disabled:hover { border-color: var(--rule); color: var(--ink); }
 
+.run-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.run {
+  font: inherit;
+  font-size: 0.9375rem;
+  padding: 6px 14px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+}
+.run:hover { background: var(--focus); border-color: var(--focus); }
+.run:disabled { opacity: 0.55; cursor: default; }
+.run:disabled:hover { background: var(--ink); border-color: var(--ink); }
+.run-status { color: var(--muted); font-size: 0.875rem; }
+
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--grey); flex: none; }
 .dot.red { background: var(--red); }
 .dot.amber { background: var(--amber); }

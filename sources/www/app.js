@@ -3,7 +3,7 @@
 (function () {
   'use strict';
 
-  var LABELS = {red: 'Needs fixing', amber: 'Needs attention', green: 'Healthy', grey: 'Archived'};
+  var LABELS = {red: 'Needs fixing', amber: 'Needs attention', green: 'Healthy', grey: 'Not checked'};
   var ORDER = ['red', 'amber', 'green', 'grey'];
   var state = {filter: 'all', query: '', status: null, history: {}};
 
@@ -57,6 +57,12 @@
     return days + ' days ago';
   }
 
+  /* Grey covers two different cases; name the real one for a repo. */
+  function stateLabel(repo) {
+    if (repo.status === 'grey') { return repo.archived ? 'Archived' : 'Unreadable'; }
+    return LABELS[repo.status];
+  }
+
   function renderHeader() {
     var s = state.status;
     var tz = s.timezone || 'UTC';
@@ -82,8 +88,8 @@
     s.repos.forEach(function (repo) {
       var a = el('a', repo.status);
       a.href = '#' + slug(repo.full_name);
-      a.title = (repo.component || repo.name) + ': ' + LABELS[repo.status] + '. ' + repo.summary;
-      a.setAttribute('aria-label', (repo.component || repo.name) + ', ' + LABELS[repo.status]);
+      a.title = (repo.component || repo.name) + ': ' + stateLabel(repo) + '. ' + repo.summary;
+      a.setAttribute('aria-label', (repo.component || repo.name) + ', ' + stateLabel(repo));
       a.addEventListener('click', function () { openRow(repo.full_name); });
       rack.appendChild(a);
     });
@@ -141,7 +147,7 @@
     row.querySelector('.summary').textContent = repo.summary;
     row.querySelector('.tag').textContent = repo.archived ? '' : (repo.latest_tag || 'no release');
     row.querySelector('.range').textContent = repo.supported ? 'Moodle ' + repo.supported[0] + '–' + repo.supported[1] : '';
-    row.querySelector('.state').textContent = LABELS[repo.status];
+    row.querySelector('.state').textContent = stateLabel(repo);
     row.querySelector('.ticks').replaceWith(ticks(repo));
 
     var list = row.querySelector('.findings');
@@ -263,7 +269,7 @@
       lines.push([
         repo.full_name,
         repo.component || repo.name,
-        LABELS[repo.status],
+        stateLabel(repo),
         repo.summary,
         repo.archived ? '' : (repo.latest_tag || 'no release'),
         repo.supported ? repo.supported[0] + '–' + repo.supported[1] : '',
@@ -282,6 +288,77 @@
     // The print stylesheet expands every row's findings, so just open the print dialog
     // (where the browser offers "Save as PDF"). The on-screen view is left untouched.
     window.print();
+  }
+
+  function runStatus(text) {
+    var node = document.getElementById('run-status');
+    if (node) { node.textContent = text || ''; }
+  }
+
+  function render() {
+    renderHeader();
+    renderSegments();
+    renderList();
+    renderAbout();
+    setExportsEnabled((state.status.repos || []).length > 0);
+  }
+
+  /* After starting a check, wait for a newer run to land, then redraw the page. */
+  function pollForRun(baseline, deadline, button) {
+    window.setTimeout(function () {
+      load('status.json').then(function (status) {
+        if (((status.run && status.run.finished_ts) || 0) > baseline) {
+          return load('history.json').catch(function () { return {}; }).then(function (history) {
+            state.status = status;
+            state.history = history || {};
+            if (state.filter !== 'all' && !(status.counts || {})[state.filter]) { state.filter = 'all'; }
+            render();
+            runStatus(status.run && status.run.ok ? 'Updated just now.'
+              : 'Check finished with a problem — see the banner above.');
+            button.disabled = false;
+          });
+        }
+        if (Date.now() > deadline) {
+          runStatus('Still running — reload the page in a little while.');
+          button.disabled = false;
+          return;
+        }
+        pollForRun(baseline, deadline, button);
+      }).catch(function () {
+        if (Date.now() > deadline) {
+          runStatus('Reload the page to see the results.');
+          button.disabled = false;
+          return;
+        }
+        pollForRun(baseline, deadline, button);
+      });
+    }, 4000);
+  }
+
+  function runNow() {
+    var button = document.getElementById('run-now');
+    if (button.disabled) { return; }
+    button.disabled = true;
+    runStatus('Starting a check…');
+    // Read the current run time straight from disk first: if a scheduled check finished
+    // while this page sat open, the displayed status is stale and would be mistaken for
+    // the run we're about to start.
+    load('status.json').then(function (status) {
+      return (status.run && status.run.finished_ts) || 0;
+    }).catch(function () {
+      return (state.status && state.status.run && state.status.run.finished_ts) || 0;
+    }).then(function (baseline) {
+      return fetch('run', {method: 'POST', credentials: 'same-origin', headers: {Accept: 'application/json'}})
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+        .then(function (data) {
+          runStatus(data && data.started === false && data.running
+            ? 'A check is already running…' : 'Checking… this takes a minute or two.');
+          pollForRun(baseline, Date.now() + 6 * 60 * 1000, button);
+        });
+    }).catch(function () {
+      runStatus('Couldn’t start a check here. Use the YunoHost config panel.');
+      button.disabled = false;
+    });
   }
 
   function load(url) {
@@ -306,17 +383,14 @@
     setExportsEnabled(false);
     document.getElementById('export-csv').addEventListener('click', exportCsv);
     document.getElementById('export-pdf').addEventListener('click', exportPdf);
+    document.getElementById('run-now').addEventListener('click', runNow);
     load('status.json').then(function (status) {
       state.status = status;
       if (state.filter !== 'all' && !(status.counts || {})[state.filter]) { state.filter = 'all'; }
       return load('history.json').catch(function () { return {}; });
     }).then(function (history) {
       state.history = history || {};
-      renderHeader();
-      renderSegments();
-      renderList();
-      renderAbout();
-      setExportsEnabled((state.status.repos || []).length > 0);
+      render();
       if (location.hash) {
         var row = document.querySelector(location.hash.replace(/[^#A-Za-z0-9_-]/g, ''));
         if (row) { row.scrollIntoView(); }

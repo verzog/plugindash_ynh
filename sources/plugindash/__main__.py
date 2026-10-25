@@ -5,6 +5,7 @@ Commands:
   run --no-alerts
   test-alert    Send a test message through every configured channel.
   list-checks   Show the checks that will run (built-in and extensions).
+  serve-run     (Used by the systemd run service) localhost endpoint for the "Run check now" button.
   write-config  (Used by the YunoHost scripts) build config.json from PD_* environment variables.
 """
 
@@ -62,6 +63,21 @@ def cmd_test_alert(args) -> int:
     return 0 if all(r == "sent" for r in results.values()) else 1
 
 
+def cmd_serve_run(args) -> int:
+    from .config import load
+    from .runserver import serve
+    cfg = load(args.config)
+    try:
+        port = int(os.environ.get("PLUGINDASH_RUN_PORT", "0"))
+    except ValueError:
+        port = 0
+    if port <= 0:
+        print("No run port configured (set PLUGINDASH_RUN_PORT).", file=sys.stderr)
+        return 1
+    serve(cfg, port)
+    return 0
+
+
 def cmd_list_checks(args) -> int:
     from .checks import load_checks
     from .config import load
@@ -109,12 +125,13 @@ def main(argv=None) -> int:
     p_run.add_argument("--no-alerts", action="store_true")
     sub.add_parser("test-alert")
     sub.add_parser("list-checks")
+    sub.add_parser("serve-run")
     p_write = sub.add_parser("write-config")
     p_write.add_argument("--output", required=True)
     args = parser.parse_args(argv)
     _setup_logging(args.verbose)
     handlers = {"run": cmd_run, "test-alert": cmd_test_alert, "list-checks": cmd_list_checks,
-                "write-config": cmd_write_config}
+                "serve-run": cmd_serve_run, "write-config": cmd_write_config}
     return handlers[args.command](args)
 
 
