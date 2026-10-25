@@ -6,6 +6,8 @@ import json
 import os
 from typing import Any
 
+from .moodle import parse_branch
+
 DEFAULTS: dict[str, Any] = {
     # Where the dashboard lives (used for links in alerts).
     "public_url": "",
@@ -30,6 +32,9 @@ DEFAULTS: dict[str, Any] = {
     "disabled_checks": [],
     "severity_overrides": {},        # e.g. {"unreleased": "info"}
     "stale_days": 30,
+    # The supported Moodle range plugins are held to (see the moodle_baseline and ci_setup checks).
+    "moodle_min_branch": "5.1",
+    "moodle_max_branch": "5.3",
     # "Dependabot Updates" is GitHub's own bot workflow, never the plugin's test CI.
     "ci_ignore_workflows": ["release.yml", "Dependabot Updates"],
     "moodle_latest_branch": 0,      # 0 = look it up from moodle/moodle on GitHub.
@@ -119,6 +124,8 @@ def normalise(raw: dict[str, Any]) -> dict[str, Any]:
             cfg[key] = int(cfg[key])
         except (TypeError, ValueError):
             cfg[key] = DEFAULTS[key]
+    for key, default in (("moodle_min_branch", 501), ("moodle_max_branch", 503)):
+        cfg[key] = parse_branch(cfg[key]) or default
     if cfg["alert_on"] not in ("worse", "any", "none"):
         cfg["alert_on"] = "worse"
     cfg["gitlab_url"] = str(cfg["gitlab_url"]).rstrip("/")

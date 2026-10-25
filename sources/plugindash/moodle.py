@@ -24,6 +24,26 @@ def branch_name(branch: int) -> str:
     return f"MOODLE_{branch}_STABLE"
 
 
+def parse_branch(value: Any) -> int:
+    """'5.1' or '501' -> 501. Returns 0 if it isn't a Moodle 4.0+ branch."""
+    text = str(value).strip()
+    match = re.fullmatch(r"(\d+)\.(\d+)", text)
+    if match:
+        major, minor = int(match.group(1)), int(match.group(2))
+        return major * 100 + minor if major >= 4 and minor < 100 else 0
+    return int(text) if text.isdigit() and int(text) >= 400 else 0
+
+
+# Moodle's version number at each branch's release, to check $plugin->requires against.
+# Only branches whose number is known for certain are listed.
+BRANCH_VERSIONS = {501: 2025100600}
+
+
+def min_php(branch: int) -> tuple[int, int]:
+    """Lowest PHP a Moodle branch installs on: 5.2 dropped PHP 8.2."""
+    return (8, 2) if branch <= 501 else (8, 3)
+
+
 def supported_range(fields: dict[str, Any]) -> tuple[int, int] | None:
     value = fields.get("supported")
     if isinstance(value, list) and len(value) == 2 and all(isinstance(v, int) for v in value):

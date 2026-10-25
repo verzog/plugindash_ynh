@@ -23,6 +23,8 @@ plugindash_set_defaults() {
     ynh_app_setting_set_default --key=disabled_checks --value=""
     ynh_app_setting_set_default --key=severity_overrides --value=""
     ynh_app_setting_set_default --key=stale_days --value=30
+    ynh_app_setting_set_default --key=moodle_min_branch --value="5.1"
+    ynh_app_setting_set_default --key=moodle_max_branch --value="5.3"
     # "Dependabot Updates" is GitHub's own bot workflow, never the plugin's test CI.
     ynh_app_setting_set_default --key=ci_ignore_workflows --value="release.yml, Dependabot Updates"
     ynh_app_setting_set_default --key=timezone --value="UTC"
@@ -106,6 +108,8 @@ plugindash_write_config() {
         PD_DISABLED_CHECKS="$disabled_checks" \
         PD_SEVERITY_OVERRIDES="$severity_overrides" \
         PD_STALE_DAYS="$stale_days" \
+        PD_MOODLE_MIN_BRANCH="$moodle_min_branch" \
+        PD_MOODLE_MAX_BRANCH="$moodle_max_branch" \
         PD_CI_IGNORE_WORKFLOWS="$ci_ignore_workflows" \
         PD_ALERT_ON="$alert_on" \
         PD_NTFY_URL="$ntfy_url" \

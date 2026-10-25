@@ -19,6 +19,7 @@ from fakes import (  # noqa: E402
 from plugindash import config as config_mod  # noqa: E402
 from plugindash.checks import Context, load_checks  # noqa: E402
 from plugindash.model import AMBER, INFO, OK, RED, Job, SecurityAlert, Workflow  # noqa: E402
+from plugindash.checks._ci import matrix_cells  # noqa: E402
 from plugindash.modes import MODE_A, MODE_B, mode_label, plugin_mode  # noqa: E402
 from plugindash.moodle import branch_label, normalise_tag, version_key  # noqa: E402
 from plugindash.output import prometheus  # noqa: E402
@@ -277,6 +278,82 @@ class LicenceModeTests(unittest.TestCase):
                          directory=FakeDirectory(), now=NOW)
         self.assertEqual(status["repos"][0]["mode"], "SCCA")
         self.assertEqual(status["repos"][0]["status"], "green")
+
+
+def ci_repo(text, **overrides):
+    repo = healthy_repo("v/r", "local_x", **overrides)
+    repo._files[".github/workflows/moodle-ci.yml"] = text
+    return repo
+
+
+class CiSetupTests(unittest.TestCase):
+    def test_matrix_styles(self):
+        flow, uncertain = matrix_cells(CI_YAML)
+        self.assertFalse(uncertain)
+        self.assertIn({"branch": "MOODLE_501_STABLE", "php": "8.2"}, flow)
+        block = "matrix:\n  include:\n    - moodle-branch: MOODLE_502_STABLE\n      php: '8.2'\n"
+        self.assertEqual(matrix_cells(block)[0], [{"branch": "MOODLE_502_STABLE", "php": "8.2"}])
+        crossed = "matrix:\n  php: ['8.2', '8.3']\n  moodle-branch: ['MOODLE_501_STABLE']\n"
+        self.assertEqual(len(matrix_cells(crossed)[0]), 2)
+        self.assertTrue(matrix_cells(crossed + "  exclude:\n    - php: '8.2'\n")[1])
+
+    def test_conventional_workflow_is_ok(self):
+        self.assertEqual(levels(run_check("ci_setup", ci_repo(CI_YAML))), [OK])
+
+    def test_php_a_branch_cannot_install_on_is_red(self):
+        text = CI_YAML.replace("'MOODLE_502_STABLE', php: '8.3'", "'MOODLE_502_STABLE', php: '8.2'")
+        findings = run_check("ci_setup", ci_repo(text))
+        self.assertEqual(levels(findings), [RED])
+        self.assertIn("Moodle 5.2 on PHP 8.2", findings[0].message)
+
+    def test_matrix_conventions(self):
+        old = CI_YAML.replace("'MOODLE_502_STABLE'", "'MOODLE_500_STABLE'")
+        self.assertIn("below the 5.1 baseline", run_check("ci_setup", ci_repo(old))[0].message)
+        no_main = CI_YAML.replace("- {moodle-branch: 'main'", "# - {moodle-branch: 'main'")
+        self.assertIn("No Moodle main cell", run_check("ci_setup", ci_repo(no_main))[0].message)
+        strict_main = CI_YAML.replace("continue-on-error: ${{ matrix.moodle-branch == 'main' }}", "")
+        self.assertIn("allowed to fail", run_check("ci_setup", ci_repo(strict_main))[0].message)
+
+    def test_tz_flags_grunt_travis_and_release(self):
+        no_tz = CI_YAML.replace("TZ: Australia/Sydney", "")
+        self.assertIn("doesn't set TZ", run_check("ci_setup", ci_repo(no_tz))[0].message)
+        brisbane = CI_YAML.replace("Australia/Sydney", "Australia/Brisbane")
+        self.assertIn("use Australia/Sydney", run_check("ci_setup", ci_repo(brisbane))[0].message)
+        lax = CI_YAML.replace("phpcs --max-warnings 0", "phpcs").replace("--fail-on-warning", "")
+        message = run_check("ci_setup", ci_repo(lax))[0].message
+        self.assertIn("phpcs --max-warnings 0", message)
+        self.assertIn("phpunit --fail-on-warning", message)
+        self.assertNotIn("phpdoc", message)
+        everywhere = CI_YAML.replace("matrix.moodle-branch == 'MOODLE_501_STABLE'", "true")
+        self.assertIn("Grunt runs on every branch", run_check("ci_setup", ci_repo(everywhere))[0].message)
+        travis = ci_repo(CI_YAML)
+        travis._files[".travis.yml"] = "language: php\n"
+        self.assertIn(".travis.yml", run_check("ci_setup", travis)[0].message)
+        ci_only = [Workflow("1", "Moodle Plugin CI", ".github/workflows/moodle-ci.yml", "active")]
+        self.assertIn("No release workflow", run_check("ci_setup", ci_repo(CI_YAML, workflows=ci_only))[0].message)
+        in_house = scca_repo(workflows=ci_only)
+        self.assertEqual(levels(run_check("ci_setup", in_house)), [OK])
+
+    def test_gitlab_only_gets_the_common_rules(self):
+        repo = ci_repo(CI_YAML.replace("- {moodle-branch: 'main'", "# none"), source="gitlab")
+        self.assertEqual(levels(run_check("ci_setup", repo)), [OK])
+
+    def test_baseline_follows_the_configured_range(self):
+        context = ctx(moodle_min_branch="5.2")
+        self.assertIn("below the 5.2 baseline", run_check("ci_setup", ci_repo(CI_YAML), context)[0].message)
+        self.assertEqual(config_mod.normalise({"moodle_min_branch": "501"})["moodle_min_branch"], 501)
+        self.assertEqual(config_mod.normalise({"moodle_max_branch": "nonsense"})["moodle_max_branch"], 503)
+
+
+class MoodleBaselineTests(unittest.TestCase):
+    def test_baseline(self):
+        self.assertEqual(levels(run_check("moodle_baseline", healthy_repo("v/r", "local_x"))), [OK])
+        repo = healthy_repo("v/r", "local_x")
+        repo._files["version.php"] = version_php("local_x", "v1.3.0", supported="[500, 503]", requires=2025041400)
+        messages = " | ".join(f.message for f in run_check("moodle_baseline", repo))
+        self.assertIn("older than Moodle 5.1", messages)
+        self.assertIn("starts at 5.0", messages)
+        self.assertIn("the tag carries the 'v'", messages)
 
 
 class RunnerTests(unittest.TestCase):

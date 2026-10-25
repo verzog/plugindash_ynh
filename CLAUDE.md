@@ -88,7 +88,14 @@ On the server:
 - Units: `plugindash.timer` → `plugindash.service` (the daily run), and `plugindash-run.service` (always on).
 
 Check IDs: `ci_status`, `ci_activity`, `release_match`, `release_zip`, `unreleased`, `issues`,
-`moodle_support`, `licence`, `licence_mode`, `security_alerts`, `plugins_directory`.
+`moodle_support`, `moodle_baseline`, `ci_setup`, `licence`, `licence_mode`, `security_alerts`, `plugins_directory`.
+
+`moodle_baseline` and `ci_setup` hold plugins to the conventions in Verzog's Moodle plugin CLAUDE.md. The
+supported range is two config panel settings, `moodle_min_branch` / `moodle_max_branch` ("5.1" / "5.3"),
+parsed to 501 / 503. Workflows are read with plain text matching (`checks/_ci.py`, no YAML library):
+flow or block `include:` matrices and cross-product matrices (with `exclude:`, the PHP rule is skipped).
+`moodle.py` holds the facts: `BRANCH_VERSIONS` (only certain values) and `min_php()` (5.2 dropped 8.2).
+GitLab repos only get the TZ and warning-flag rules.
 
 Licence modes (`modes.py`, from the `@license` tag; shown as a tag on each row):
 

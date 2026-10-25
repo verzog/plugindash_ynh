@@ -96,6 +96,7 @@ ENV_KEYS = (
     "github_enabled", "github_token", "github_owners", "include_forks", "exclude_repos",
     "gitlab_enabled", "gitlab_url", "gitlab_token",
     "disabled_checks", "severity_overrides", "stale_days", "ci_ignore_workflows", "moodle_latest_branch",
+    "moodle_min_branch", "moodle_max_branch",
     "alert_on", "ntfy_url", "ntfy_topic", "ntfy_token", "email_to", "email_from",
     "matrix_homeserver", "matrix_room", "matrix_token",
 )
