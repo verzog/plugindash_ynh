@@ -63,6 +63,18 @@ class GitHubRepo(RepoView):
     def file_url(self, path: str, ref: str | None = None) -> str:
         return f"{self.html_url}/blob/{ref or self.default_branch}/{path}"
 
+    @cached
+    def list_dir(self, path: str) -> list[str] | None:
+        try:
+            data = self.client.get_json(
+                f"{self._api}/contents/{urllib.parse.quote(path)}", {"ref": self.default_branch},
+            )
+        except NotFound:
+            return None
+        if not isinstance(data, list):  # A file, not a folder.
+            return None
+        return [item["name"] for item in data if item.get("type") == "file"]
+
     # Releases.
     @cached
     def latest_release(self) -> Release | None:

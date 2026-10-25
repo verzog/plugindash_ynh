@@ -63,6 +63,17 @@ class GitLabRepo(RepoView):
     def file_url(self, path: str, ref: str | None = None) -> str:
         return f"{self.html_url}/-/blob/{ref or self.default_branch}/{path}"
 
+    @cached
+    def list_dir(self, path: str) -> list[str] | None:
+        try:
+            items = self.client.get_paged(
+                f"{self._api}/repository/tree", {"path": path, "ref": self.default_branch, "per_page": 100},
+            )
+        except NotFound:
+            return None
+        # GitLab answers an empty list (not 404) for a folder that doesn't exist.
+        return [item["name"] for item in items if item.get("type") == "blob"] or None
+
     # Releases.
     @cached
     def latest_release(self) -> Release | None:

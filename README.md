@@ -19,6 +19,8 @@ Once a day it finds every repository you own that contains a Moodle `version.php
 | Moodle baseline | | `requires`/`supported` older than the lowest supported Moodle (5.1); `$plugin->release` with a leading `v` |
 | CI setup | A matrix cell runs PHP its Moodle branch can't install on (e.g. 8.2 on 5.2+) | Branches below the baseline or untested; no `main` cell allowed to fail; TZ not Australia/Sydney; warnings don't fail CI; grunt not limited to 5.1; `.travis.yml`; no `release.yml` |
 | Language strings | | No `lang/en` file; keys not in `LC_ALL=C` order or repeated; US spellings (color, customize, behavior, enrollment...) |
+| AMD builds | | A module in `amd/src` has no `amd/build/<name>.min.js` (or `.map`) |
+| Dormant repo schedules | | Private repo with no push for 90 days still runs scheduled workflows or Dependabot (Actions minutes) |
 | New Moodle release watch | | Newest stable Moodle outside `$plugin->supported`, or missing from the CI matrix |
 | Licence consistency | `LICENSE` file contradicts `@license` | README disagrees; missing LICENSE/README |
 | Licence mode | In-house SCCA (Mode A) plugin in a public repo | |
