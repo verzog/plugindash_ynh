@@ -372,6 +372,9 @@ class RepoFilesTests(unittest.TestCase):
         inline._files["version.php"] = inline._files["version.php"].replace(
             "<?php\n", "<?php\n// phpcs:disable moodle.Files.BoilerplateComment\n", 1)
         self.assertEqual(levels(run_check("repo_files", inline)), [OK])
+        dist = scca_repo()
+        dist._files["phpcs.xml.dist"] = dist._files.pop(".phpcs.xml")
+        self.assertEqual(levels(run_check("repo_files", dist)), [OK])
         gpl = healthy_repo("v/r", "local_x")
         gpl._files[".phpcs.xml"] = SCCA_PHPCS
         self.assertIn("keep the moodle.Files.BoilerplateComment", run_check("repo_files", gpl)[0].message)
