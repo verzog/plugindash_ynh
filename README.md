@@ -18,6 +18,7 @@ Once a day it finds every repository you own that contains a Moodle `version.php
 | Issues | | Open issues or pull requests |
 | New Moodle release watch | | Newest stable Moodle outside `$plugin->supported`, or missing from the CI matrix |
 | Licence consistency | `LICENSE` file contradicts `@license` | README disagrees; missing LICENSE/README |
+| Licence mode | In-house SCCA (Mode A) plugin in a public repo | |
 | Security alerts | Critical/high Dependabot alerts | Medium/low alerts |
 | Plugins directory | | moodle.org listing older than your latest release |
 

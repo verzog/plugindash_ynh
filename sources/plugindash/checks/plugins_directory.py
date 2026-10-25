@@ -5,13 +5,15 @@ from __future__ import annotations
 import json
 
 from ..http import HttpError
-from ..model import AMBER, INFO, OK, Finding
+from ..model import AMBER, INFO, OK, RED, Finding
+from ..modes import MODE_A, plugin_mode
 from ..moodle import supported_range
 from ._util import version_at
 
 ID = "plugins_directory"
 TITLE = "Plugins directory listing"
-DESCRIPTION = "Amber if moodle.org's directory offers an older version than your latest release. Unlisted is info only."
+DESCRIPTION = ("Amber if moodle.org's directory offers an older version than your latest release. Unlisted is "
+               "info only. Red if an in-house SCCA plugin is listed.")
 ORDER = 70
 
 
@@ -27,6 +29,13 @@ def run(repo, plugin, ctx):
         listing = ctx.directory.lookup(component, branch)
     except (HttpError, ValueError, json.JSONDecodeError) as err:
         return [Finding(ID, INFO, f"Couldn't reach the plugins directory ({err})")]
+    if plugin_mode(plugin) == MODE_A:
+        # Proprietary in-house code must never be published.
+        if listing is not None:
+            return [Finding(
+                ID, RED, "In-house SCCA plugin is listed publicly in the Moodle plugins directory", listing["url"],
+            )]
+        return [Finding(ID, OK, "Not in the public plugins directory (in-house plugin)")]
     if listing is None:
         return [Finding(ID, INFO, "Not listed in the Moodle plugins directory")]
     rel = repo.latest_release()

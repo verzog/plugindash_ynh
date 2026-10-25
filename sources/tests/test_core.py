@@ -19,6 +19,7 @@ from fakes import (  # noqa: E402
 from plugindash import config as config_mod  # noqa: E402
 from plugindash.checks import Context, load_checks  # noqa: E402
 from plugindash.model import AMBER, INFO, OK, RED, Job, SecurityAlert, Workflow  # noqa: E402
+from plugindash.modes import MODE_A, MODE_B, mode_label, plugin_mode  # noqa: E402
 from plugindash.moodle import branch_label, normalise_tag, version_key  # noqa: E402
 from plugindash.output import prometheus  # noqa: E402
 from plugindash.phpparse import is_moodle_plugin, parse_version_php, strip_comments  # noqa: E402
@@ -230,6 +231,52 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(levels(run_check("plugins_directory", repo, context)), [INFO])
         context.directory = FakeDirectory(fail=True)
         self.assertEqual(levels(run_check("plugins_directory", repo, context)), [INFO])
+
+
+def scca_repo(private=True, **overrides):
+    """An in-house (Mode A) plugin: SCCA @license on the default branch and at its tag."""
+    repo = healthy_repo("v/r", "local_x", private=private, **overrides)
+    repo._files["version.php"] = version_php("local_x", "1.3.0", license_tag=SCCA_TAG)
+    repo._tag_files["v1.3.0"]["version.php"] = repo._files["version.php"]
+    repo._files["LICENSE"] = "Copyright (c) Skin Cancer College Australasia.\nAll rights reserved.\n"
+    repo._files["README.md"] = "# X\n\n## Licence\n\nProprietary. All rights reserved.\n"
+    return repo
+
+
+class LicenceModeTests(unittest.TestCase):
+    def test_modes_from_the_licence_tag(self):
+        self.assertEqual(plugin_mode(parse_version_php(version_php("local_x", "1.0"))), MODE_B)
+        self.assertEqual(plugin_mode(parse_version_php(version_php("local_x", "1.0", license_tag=SCCA_TAG))), MODE_A)
+        self.assertEqual(mode_label({"license": SCCA_TAG}), "SCCA")
+        self.assertEqual(mode_label({"license": "GNU GPL v3 or later"}), "GPL")
+        self.assertEqual(mode_label({"license": "MIT"}), "Other licence")
+        self.assertEqual(mode_label({}), "No licence")
+
+    def test_public_in_house_repo_is_red(self):
+        self.assertEqual(levels(run_check("licence_mode", scca_repo(private=False))), [RED])
+        self.assertEqual(levels(run_check("licence_mode", scca_repo())), [OK])
+        self.assertEqual(levels(run_check("licence_mode", healthy_repo("v/r", "local_x"))), [OK])
+
+    def test_in_house_release_rules_are_softer(self):
+        no_zip = scca_repo(release=release("v1.3.0", "local_x", assets=False))
+        self.assertEqual(levels(run_check("release_zip", no_zip)), [INFO])
+        self.assertEqual(levels(run_check("unreleased", scca_repo(commits_since=3))), [INFO])
+        # Mode B keeps the full rules.
+        gpl_no_zip = healthy_repo("v/r", "local_x", release=release("v1.3.0", "local_x", assets=False))
+        self.assertEqual(levels(run_check("release_zip", gpl_no_zip)), [RED])
+
+    def test_in_house_plugin_must_not_be_in_the_directory(self):
+        context = ctx()
+        context.directory = FakeDirectory({"local_x": {"version": 2026100100, "release": "1.3.0", "url": "u"}})
+        self.assertEqual(levels(run_check("plugins_directory", scca_repo(), context)), [RED])
+        context.directory = FakeDirectory({})
+        self.assertEqual(levels(run_check("plugins_directory", scca_repo(), context)), [OK])
+
+    def test_mode_is_on_the_dashboard_entry(self):
+        status = collect(config_mod.normalise({"github_token": "x"}), sources=[FakeSource([scca_repo()])],
+                         directory=FakeDirectory(), now=NOW)
+        self.assertEqual(status["repos"][0]["mode"], "SCCA")
+        self.assertEqual(status["repos"][0]["status"], "green")
 
 
 class RunnerTests(unittest.TestCase):

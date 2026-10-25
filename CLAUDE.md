@@ -88,7 +88,14 @@ On the server:
 - Units: `plugindash.timer` → `plugindash.service` (the daily run), and `plugindash-run.service` (always on).
 
 Check IDs: `ci_status`, `ci_activity`, `release_match`, `release_zip`, `unreleased`, `issues`,
-`moodle_support`, `licence`, `security_alerts`, `plugins_directory`.
+`moodle_support`, `licence`, `licence_mode`, `security_alerts`, `plugins_directory`.
+
+Licence modes (`modes.py`, from the `@license` tag; shown as a tag on each row):
+
+- **SCCA (Mode A)**, in-house, never distributed: a public repo is red; a plugins directory listing is red;
+  a missing or misnamed release zip and unreleased commits are info; tag vs `version.php` still checked.
+- **GPL (Mode B)**, distributed: the full release rules.
+- Anything else ("Proprietary", "Other licence", "No licence") gets the Mode B rules and an info note.
 
 ## Commands
 

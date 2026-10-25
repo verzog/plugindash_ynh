@@ -181,6 +181,20 @@ h1 { font-size: 1.75rem; line-height: 1.2; margin: 0; letter-spacing: -0.01em; }
 .ident { display: grid; min-width: 0; }
 .name { font-weight: 650; overflow-wrap: break-word; }
 .component { color: var(--muted); font-size: 0.875rem; overflow-wrap: anywhere; }
+.mode {
+  justify-self: start;
+  margin-top: 0.15rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-chip);
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.mode.mode-a {
+  border-color: var(--focus);
+  color: var(--focus);
+}
 .summary { min-width: 0; color: var(--ink); }
 .row.green .summary, .row.grey .summary { color: var(--muted); }
 .meta { display: grid; justify-items: end; font-size: 0.875rem; color: var(--muted); white-space: nowrap; }

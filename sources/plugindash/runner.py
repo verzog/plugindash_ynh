@@ -17,6 +17,7 @@ from .checks import Context, load_checks
 from .history import History
 from .http import AuthError, HttpError, NotFound
 from .model import AMBER, INFO, LEVEL_RANK, LEVELS, OK, RED, STATUS_RANK, Finding, worst_status
+from .modes import mode_label
 from .moodle import Directory, branch_label, supported_range
 from .notify import send_all
 from .output import prometheus, write_atomic, write_json
@@ -119,6 +120,7 @@ def check_repo(repo, checks, ctx: Context) -> dict[str, Any] | None:
         "default_branch": repo.default_branch,
         "pushed_at": repo.pushed_at.isoformat() if repo.pushed_at else None,
         "component": plugin.get("component"),
+        "mode": mode_label(plugin),
         "release": plugin.get("release"),
         "version": plugin.get("version"),
         "maturity": plugin.get("maturity"),
@@ -145,7 +147,7 @@ def unreadable_entry(repo, message: str) -> dict[str, Any]:
     return {
         "name": repo.name, "full_name": repo.full_name, "url": repo.html_url, "source": repo.source,
         "private": repo.private, "fork": repo.fork, "archived": repo.archived,
-        "default_branch": repo.default_branch, "pushed_at": None, "component": None, "release": None,
+        "default_branch": repo.default_branch, "pushed_at": None, "component": None, "mode": None, "release": None,
         "version": None, "maturity": None, "supported": None, "latest_tag": None,
         "latest_tag_url": None, "open_issues": 0, "open_prs": 0, "status": "grey",
         "summary": message,

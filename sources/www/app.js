@@ -144,6 +144,14 @@
     // The component is the plugin's Moodle identity; the repo name is secondary.
     row.querySelector('.name').textContent = repo.component || repo.name;
     row.querySelector('.component').textContent = repo.name;
+    var mode = row.querySelector('.mode');
+    if (repo.mode) {
+      mode.textContent = repo.mode;
+      mode.classList.add(repo.mode === 'SCCA' ? 'mode-a' : (repo.mode === 'GPL' ? 'mode-b' : 'mode-other'));
+      mode.title = 'Licence mode, from the @license tag in version.php';
+    } else {
+      mode.hidden = true;
+    }
     row.querySelector('.summary').textContent = repo.summary;
     row.querySelector('.tag').textContent = repo.archived ? '' : (repo.latest_tag || 'no release');
     row.querySelector('.range').textContent = repo.supported ? 'Moodle ' + repo.supported[0] + '–' + repo.supported[1] : '';
@@ -182,7 +190,7 @@
     if (state.filter !== 'all' && repo.status !== state.filter) { return false; }
     if (!state.query) { return true; }
     var q = state.query.toLowerCase();
-    return [repo.full_name, repo.component || '', repo.summary].some(function (v) {
+    return [repo.full_name, repo.component || '', repo.summary, repo.mode || ''].some(function (v) {
       return v.toLowerCase().indexOf(q) !== -1;
     });
   }
@@ -262,13 +270,14 @@
   }
 
   function exportCsv() {
-    var headers = ['Repository', 'Component', 'Status', 'Summary', 'Release',
+    var headers = ['Repository', 'Component', 'Licence mode', 'Status', 'Summary', 'Release',
       'Supported Moodle', 'Open issues', 'Open PRs', 'Last push', 'URL'];
     var lines = [headers.map(csvCell).join(',')];
     shownRepos().forEach(function (repo) {
       lines.push([
         repo.full_name,
         repo.component || repo.name,
+        repo.mode || '',
         stateLabel(repo),
         repo.summary,
         repo.archived ? '' : (repo.latest_tag || 'no release'),
