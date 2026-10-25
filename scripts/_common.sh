@@ -23,7 +23,8 @@ plugindash_set_defaults() {
     ynh_app_setting_set_default --key=disabled_checks --value=""
     ynh_app_setting_set_default --key=severity_overrides --value=""
     ynh_app_setting_set_default --key=stale_days --value=30
-    ynh_app_setting_set_default --key=ci_ignore_workflows --value="release.yml"
+    # "Dependabot Updates" is GitHub's own bot workflow, never the plugin's test CI.
+    ynh_app_setting_set_default --key=ci_ignore_workflows --value="release.yml, Dependabot Updates"
     ynh_app_setting_set_default --key=timezone --value="UTC"
     ynh_app_setting_set_default --key=run_time --value="06:30"
     ynh_app_setting_set_default --key=alert_on --value="worse"

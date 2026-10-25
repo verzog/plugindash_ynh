@@ -23,6 +23,13 @@ ynh_script_progression "Ensuring downward compatibility..."
 
 plugindash_set_defaults
 
+# Installs before 1.2.1 got just "release.yml" as the default, which hid the collector's own default of
+# also ignoring "Dependabot Updates". Add it only if the setting was never changed from that old default.
+if [ "$ci_ignore_workflows" = "release.yml" ]; then
+    ci_ignore_workflows="release.yml, Dependabot Updates"
+    ynh_app_setting_set --key=ci_ignore_workflows --value="$ci_ignore_workflows"
+fi
+
 # ynh_app_setting_set_default also updates the variables, so every setting is now loaded.
 
 #=================================================
