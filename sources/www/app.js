@@ -338,20 +338,27 @@
   function runNow() {
     var button = document.getElementById('run-now');
     if (button.disabled) { return; }
-    var baseline = (state.status && state.status.run && state.status.run.finished_ts) || 0;
     button.disabled = true;
     runStatus('Starting a check…');
-    fetch('run', {method: 'POST', credentials: 'same-origin', headers: {Accept: 'application/json'}})
-      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
-      .then(function (data) {
-        runStatus(data && data.started === false && data.running
-          ? 'A check is already running…' : 'Checking… this takes a minute or two.');
-        pollForRun(baseline, Date.now() + 6 * 60 * 1000, button);
-      })
-      .catch(function () {
-        runStatus('Couldn’t start a check here. Use the YunoHost config panel.');
-        button.disabled = false;
-      });
+    // Read the current run time straight from disk first: if a scheduled check finished
+    // while this page sat open, the displayed status is stale and would be mistaken for
+    // the run we're about to start.
+    load('status.json').then(function (status) {
+      return (status.run && status.run.finished_ts) || 0;
+    }).catch(function () {
+      return (state.status && state.status.run && state.status.run.finished_ts) || 0;
+    }).then(function (baseline) {
+      return fetch('run', {method: 'POST', credentials: 'same-origin', headers: {Accept: 'application/json'}})
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+        .then(function (data) {
+          runStatus(data && data.started === false && data.running
+            ? 'A check is already running…' : 'Checking… this takes a minute or two.');
+          pollForRun(baseline, Date.now() + 6 * 60 * 1000, button);
+        });
+    }).catch(function () {
+      runStatus('Couldn’t start a check here. Use the YunoHost config panel.');
+      button.disabled = false;
+    });
   }
 
   function load(url) {
