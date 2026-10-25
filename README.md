@@ -21,6 +21,7 @@ Once a day it finds every repository you own that contains a Moodle `version.php
 | New Moodle release watch | | Newest stable Moodle outside `$plugin->supported`, or missing from the CI matrix |
 | Licence consistency | `LICENSE` file contradicts `@license` | README disagrees; missing LICENSE/README |
 | Licence mode | In-house SCCA (Mode A) plugin in a public repo | |
+| Repository files | SCCA plugin doesn't exclude phpcs's boilerplate sniff (CI fails) | GPL plugin excludes it; `@copyright` holder doesn't match the mode; `.gitattributes` missing `eol=lf`/`export-ignore`; no Privacy API provider |
 | Security alerts | Critical/high Dependabot alerts | Medium/low alerts |
 | Plugins directory | | moodle.org listing older than your latest release |
 

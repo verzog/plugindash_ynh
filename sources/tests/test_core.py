@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fakes import (  # noqa: E402
-    CI_YAML, NOW, SCCA_TAG, DeniedRepo, FakeDirectory, FakeRepo, FakeSource, denied_repo, failed_run, healthy_repo,
-    ok_run, release, sample_directory, sample_repos, version_php,
+    CI_YAML, NOW, SCCA_PHPCS, SCCA_TAG, DeniedRepo, FakeDirectory, FakeRepo, FakeSource, denied_repo, failed_run,
+    healthy_repo, ok_run, release, sample_directory, sample_repos, version_php,
 )
 from plugindash import config as config_mod  # noqa: E402
 from plugindash.checks import Context, load_checks  # noqa: E402
@@ -241,6 +241,7 @@ def scca_repo(private=True, **overrides):
     repo._tag_files["v1.3.0"]["version.php"] = repo._files["version.php"]
     repo._files["LICENSE"] = "Copyright (c) Skin Cancer College Australasia.\nAll rights reserved.\n"
     repo._files["README.md"] = "# X\n\n## Licence\n\nProprietary. All rights reserved.\n"
+    repo._files[".phpcs.xml"] = SCCA_PHPCS
     return repo
 
 
@@ -354,6 +355,59 @@ class MoodleBaselineTests(unittest.TestCase):
         self.assertIn("older than Moodle 5.1", messages)
         self.assertIn("starts at 5.0", messages)
         self.assertIn("the tag carries the 'v'", messages)
+
+
+class RepoFilesTests(unittest.TestCase):
+    def test_conventional_repos_are_ok(self):
+        self.assertEqual(levels(run_check("repo_files", healthy_repo("v/r", "local_x"))), [OK])
+        self.assertEqual(levels(run_check("repo_files", scca_repo())), [OK])
+
+    def test_boilerplate_sniff_follows_the_licence_mode(self):
+        no_exclusion = scca_repo()
+        del no_exclusion._files[".phpcs.xml"]
+        self.assertEqual(levels(run_check("repo_files", no_exclusion)), [RED])
+        inline = scca_repo()
+        del inline._files[".phpcs.xml"]
+        inline._files["version.php"] = inline._files["version.php"].replace(
+            "<?php\n", "<?php\n// phpcs:disable moodle.Files.BoilerplateComment\n", 1)
+        self.assertEqual(levels(run_check("repo_files", inline)), [OK])
+        dist = scca_repo()
+        dist._files["phpcs.xml.dist"] = dist._files.pop(".phpcs.xml")
+        self.assertEqual(levels(run_check("repo_files", dist)), [OK])
+        gpl = healthy_repo("v/r", "local_x")
+        gpl._files[".phpcs.xml"] = SCCA_PHPCS
+        self.assertIn("keep the moodle.Files.BoilerplateComment", run_check("repo_files", gpl)[0].message)
+
+    def test_copyright_holder_follows_the_licence_mode(self):
+        gpl = healthy_repo("v/r", "local_x")
+        gpl._files["version.php"] = version_php("local_x", "1.3.0", copyright="© Skin Cancer College Australasia")
+        self.assertIn("a GPL plugin uses", run_check("repo_files", gpl)[0].message)
+        educheckout = healthy_repo("v/r", "local_x")
+        educheckout._files["version.php"] = version_php("local_x", "1.3.0",
+                                                        copyright="2026 Vernon Spain trading as EduCheckout")
+        self.assertEqual(levels(run_check("repo_files", educheckout)), [OK])
+        scca = scca_repo()
+        scca._files["version.php"] = version_php("local_x", "1.3.0", license_tag=SCCA_TAG,
+                                                 copyright="2026 Vernon Spain")
+        self.assertIn("an SCCA plugin uses", run_check("repo_files", scca)[0].message)
+        fork = healthy_repo("v/r", "local_x", fork=True)
+        fork._files["version.php"] = version_php("local_x", "1.3.0", copyright="2015 Someone Else")
+        self.assertEqual(levels(run_check("repo_files", fork)), [OK])
+
+    def test_gitattributes_and_privacy_provider(self):
+        repo = healthy_repo("v/r", "local_x")
+        repo._files[".gitattributes"] = "/.github export-ignore\n"
+        message = run_check("repo_files", repo)[0].message
+        self.assertIn("eol=lf", message)
+        self.assertIn("/tests export-ignore", message)
+        in_house = scca_repo()
+        in_house._files[".gitattributes"] = "* text=auto eol=lf\n"
+        self.assertEqual(levels(run_check("repo_files", in_house)), [OK])  # No release zip, so no export-ignore.
+        bare = healthy_repo("v/r", "local_x")
+        del bare._files[".gitattributes"], bare._files["classes/privacy/provider.php"]
+        messages = " | ".join(f.message for f in run_check("repo_files", bare))
+        self.assertIn("No .gitattributes", messages)
+        self.assertIn("No Privacy API provider", messages)
 
 
 class RunnerTests(unittest.TestCase):
