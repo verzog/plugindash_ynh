@@ -14,6 +14,7 @@ ynh_script_progression "Pausing the daily check..."
 
 systemctl stop "$app.timer" 2>/dev/null || true
 systemctl stop "$app.service" 2>/dev/null || true
+systemctl stop "$app-run.service" 2>/dev/null || true
 
 #=================================================
 # ENSURE DOWNWARD COMPATIBILITY

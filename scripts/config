@@ -49,7 +49,7 @@ try:
     else:
         style = "danger" if counts.get("red") else ("warning" if counts.get("amber") else "success")
         text = (f"Last check {when}: {counts.get('red', 0)} need fixing, {counts.get('amber', 0)} need attention, "
-                f"{counts.get('green', 0)} healthy, {counts.get('grey', 0)} archived.")
+                f"{counts.get('green', 0)} healthy, {counts.get('grey', 0)} not checked.")
 except Exception as err:
     style = "warning"
     text = f"Couldn't read the last check's results ({type(err).__name__}). Use Run the check now to rebuild them."

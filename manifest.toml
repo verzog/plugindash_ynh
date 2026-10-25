@@ -6,7 +6,7 @@ id = "plugindash"
 name = "Plugin Dashboard"
 description.en = "Daily colour-coded health dashboard for your Moodle plugin repositories on GitHub and GitLab"
 
-version = "1.1.2~ynh1"
+version = "1.2.0~ynh1"
 
 maintainers = ["verzog"]
 
@@ -59,6 +59,11 @@ ram.runtime = "100M"
     group = "www-data:r-x"
 
     [resources.data_dir]
+
+    # Localhost-only port for the "Run check now" endpoint (plugindash-run.service).
+    # Not exposed in the firewall; only nginx reaches it, behind the admin SSO.
+    [resources.ports]
+    main.default = 8765
 
     [resources.permissions]
     main.url = "/"
