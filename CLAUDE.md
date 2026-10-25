@@ -28,29 +28,54 @@ red, amber, green or grey on a single page. It is for his own use only: one admi
   (setting `metrics_allow`).
 - Tokens are stored only in YunoHost settings and in `config.json` (mode 600, owned by the app user).
   Never write them into the web folder or the logs.
+- "Run check now" on the page POSTs to `__PATH__/run`, which nginx proxies (behind the admin SSO) to a
+  localhost-only service, `plugindash-run` (`runserver.py`, port from `[resources.ports]`). It starts a
+  detached collector run. Runs are serialised by `$data_dir/run.lock`, so it never overlaps the timer.
+- "No published releases yet" is info, not amber: an unreleased plugin isn't unhealthy.
+- GitHub's own "Dependabot Updates" workflow is never plugin CI (ignored by default).
 
 ## Behaviours that are easy to get wrong
 
 - `release_match` compares the tag with `version.php` *at that tag*, not on `main`. This avoids a false
   red when `main` is already bumped for the next release.
 - A failing Moodle `main` matrix cell, or a GitLab job with `allow_failure`, is amber, never red.
+- Grey means "not checked": archived (page label "Archived") *or* unreadable (label "Unreadable"). A repo
+  the token can't read is shown grey with a hint (GitHub: Contents; GitLab: read_api), never dropped.
+  If no repo at all could be read, the run fails and the previous results stay on screen.
+- A check that couldn't run because of the token (403, or a 404 reaching a check, which is how GitHub
+  hides private-repo data from a token without that permission) is amber with `overridable=False`, so a
+  severity override can't make it look healthy. Other fetch errors (5xx, network) stay info, so a brief
+  outage doesn't flip colours. Missing Dependabot access is `NotAvailable` and stays info.
+- Expected 404s (missing file, no release, no workflows) are turned into empty results inside the
+  sources. Without Contents, GitHub reports a private repo's `version.php` as 404 too, so such a repo
+  looks like a non-plugin and is skipped: a known limit no code can tell apart.
+- A custom check returning a bad level becomes a "check error" for that check only; the run carries on.
+- Alerts compare against the `alert_baseline` table (colours you were last told about), not the last
+  run. If every channel fails, changed repos keep their old baseline colour, so the alert is resent
+  next run. With no channel set up, `alert_on = none` or `--no-alerts`, the baseline just moves on.
+- The config panel's `tags` widget splits on spaces. Settings that can hold multi-word values (e.g.
+  `ci_ignore_workflows`) must be plain `string` fields, comma-separated.
+- GitHub owners may be entered as a profile URL or `@handle`; they're normalised to the bare login.
 
 ## Layout
 
 ```
 manifest.toml, config_panel.toml, tests.toml
-conf/        nginx.conf, systemd.service (oneshot, sandboxed), systemd.timer
+conf/        nginx.conf, systemd.service (oneshot, sandboxed), systemd.timer,
+             systemd-run.service (the localhost "Run check now" endpoint)
 scripts/     _common.sh (all shared logic), install, upgrade, remove, backup, restore, change_url, config
-doc/         DESCRIPTION.md, ADMIN.md, POST_INSTALL.md, screenshots/
+doc/         DESCRIPTION.md, ADMIN.md, POST_INSTALL.md, logo.svg, logo.png, screenshots/
 sources/
   run.py                 entry point (adds its own folder to sys.path)
   plugindash/
-    runner.py            one run: collect, history, outputs, alerts
+    runner.py            one run: collect, history, outputs, alerts (guarded by run.lock)
+    runserver.py         localhost-only POST /run endpoint behind the "Run check now" button
     checks/              one module per check (ID, TITLE, DESCRIPTION, ORDER, run(repo, plugin, ctx))
     sources/             base.py (the RepoView interface), github.py, gitlab.py
     notify/              ntfy.py, mail.py, matrix.py
-    phpparse.py, moodle.py, history.py (SQLite), output.py, http.py, config.py
-  www/                   static page: index.html, app.js, style.css (reads status.json + history.json)
+    phpparse.py, moodle.py, history.py (SQLite: runs, statuses, alert_baseline), output.py, http.py, config.py
+  www/                   static page: index.html, app.js, style.css, favicon.svg (reads status.json +
+                         history.json; also Export CSV / Export PDF and Run check now)
   tests/                 fakes.py, test_core.py, test_sources.py, make_preview.py
   extensions-example/    copied to $data_dir/extensions on install
 ```
@@ -59,7 +84,8 @@ On the server:
 
 - `/var/www/plugindash/` is `root:www-data 751`; `app/` is `root:plugindash`; `www/` is
   `plugindash:www-data 2750`; `config.json` is mode 600.
-- Data lives in `/home/yunohost.app/plugindash/`: `history.sqlite` and `extensions/{checks,notify}`.
+- Data lives in `/home/yunohost.app/plugindash/`: `history.sqlite`, `run.lock` and `extensions/{checks,notify}`.
+- Units: `plugindash.timer` → `plugindash.service` (the daily run), and `plugindash-run.service` (always on).
 
 Check IDs: `ci_status`, `ci_activity`, `release_match`, `release_zip`, `unreleased`, `issues`,
 `moodle_support`, `licence`, `security_alerts`, `plugins_directory`.
@@ -74,33 +100,36 @@ bash -n scripts/* && shellcheck -x -e SC1091,SC2154,SC2034 -s bash scripts/*
 ```
 
 On the server: `sudo systemctl start plugindash.service` runs a check now;
-`journalctl -u plugindash.service` shows the logs.
+`journalctl -u plugindash.service` shows the logs (`-u plugindash-run.service` for the run-now endpoint).
 
-## Test status (v1.0.0~ynh1)
+## Versions and upgrades
 
-Tested: 42 unit tests on Python 3.11 and 3.13 (every check, GitHub and GitLab sources against a fake API,
-alerts on colour change, a rejected token keeping the previous results); scripts dry-run against stand-in
-helpers; generated nginx config passed `nginx -t`; `systemd-analyze verify` passed on both units;
-shellcheck-clean.
+The app is installed, so every change that should reach the server needs a version bump in
+`manifest.toml` (`1.2.0~ynh1` → `1.2.1~ynh1` for app code, `~ynh2` for packaging-only changes), or
+`yunohost app upgrade` won't see it. Parallel PRs need distinct versions.
 
-Not yet tested:
+## Test status (v1.2.0~ynh1)
 
-- A real YunoHost install, on 12 or 13.
-- A run against the real GitHub API.
-- `download.moodle.org/api/1.3/pluginfo.php` (may have changed with the Moodle Marketplace move; the check
-  downgrades to "info" on any failure).
-- The systemd sandbox in a real run. `MemoryDenyWriteExecute` and `ProtectSystem=strict` are the most
-  likely to need loosening. If one blocks something, loosen only that option and say why in a comment.
+Tested: 58 unit tests on Python 3.11 and 3.13 (every check, GitHub and GitLab sources against a fake API,
+alerts and alert retries, unreadable repos, permission-blocked checks, the run lock and run endpoint).
+The generated nginx config (before the `/run` route was added) ran in nginx with headers-more.
+Shellcheck-clean; package_linter clean apart from the known false positives and catalogue warnings.
+Installed and run against the real GitHub API; the first real run was triaged in PR #11 (owner URL,
+release tag message, Dependabot workflow).
+
+Not yet confirmed:
+
+- YunoHost 12 (Bookworm), and `package_check` on either version.
+- Whether `download.moodle.org/api/1.3/pluginfo.php` still answers (the check downgrades to "info" on any
+  failure).
+- The systemd sandbox for the alert channels. If an option blocks something, loosen only that option and
+  say why in a comment.
 - GitLab against a real instance (only the fake API so far).
 
 ## Next tasks
 
-1. Install on the Contabo dev box (YunoHost, Debian 13), add a fine-grained read-only token (Metadata,
-   Contents, Issues, Pull requests, Actions, Dependabot alerts), press **Run the check now**.
-2. Triage the first real run: false reds/ambers (especially `licence` README parsing and `moodle_support`
-   CI matrix detection), API call count, whether `pluginfo.php` still answers.
-3. Run `package_check` on YunoHost 12 and 13 if possible.
-4. GitLab: verify against the self-hosted instance once it is back.
+1. Check whether `pluginfo.php` still answers; run `package_check` if possible.
+2. GitLab: verify against the self-hosted instance once it is back.
 
 ## Working with Verzog
 
