@@ -91,6 +91,7 @@ def gh_routes():
         f"{repo}/contents/LICENSE": GPL3_TEXT,
         f"{repo}/contents/README.md": "# X\n\n## License\n\nGPL v3 or later\n",
         f"{repo}/contents/.github/workflows/ci.yml": "matrix: MOODLE_503_STABLE",
+        f"{repo}/contents/amd/src": [{"name": "app.js", "type": "file"}, {"name": "local", "type": "dir"}],
         f"{repo}/releases/latest": {
             "tag_name": "v1.3.0", "name": "v1.3.0", "html_url": "https://github.com/x/releases/tag/v1.3.0",
             "published_at": "2026-10-01T00:00:00Z",
@@ -140,6 +141,8 @@ class GitHubSourceTests(unittest.TestCase):
         repo = self.source.list_repos()[0]
         self.assertIn("local_x", repo.file("version.php"))
         self.assertIsNone(repo.file("missing.txt"))
+        self.assertEqual(repo.list_dir("amd/src"), ["app.js"])
+        self.assertIsNone(repo.list_dir("amd/build"))
         rel = repo.latest_release()
         self.assertEqual((rel.tag, rel.assets[0]["name"]), ("v1.3.0", "local_x-v1.3.0.zip"))
         self.assertEqual(repo.commits_since("v1.3.0"), 2)
@@ -187,6 +190,9 @@ class GitLabSourceTests(unittest.TestCase):
                                   "last_activity_at": "2026-10-20T00:00:00Z"}],
             f"{p}/repository/files/version.php/raw": vp,
             f"{p}/repository/files/.gitlab-ci.yml/raw": "MOODLE_503_STABLE",
+            f"{p}/repository/tree": lambda h, q: (
+                200, [{"name": "app.js", "type": "blob"}] if q.get("path") == "amd/src" else [], {},
+            ),
             f"{p}/releases": [{"tag_name": "v2.0.0", "name": "v2.0.0", "released_at": "2026-10-01T00:00:00Z",
                                "assets": {"links": [{"name": "block_y-v2.0.0.zip", "url": "https://z"}]},
                                "_links": {"self": "https://gitlab.example/r"}}],
@@ -214,6 +220,11 @@ class GitLabSourceTests(unittest.TestCase):
         self.assertEqual(levels["release_zip"], "ok")
         self.assertEqual(levels["security_alerts"], "info")
         self.assertTrue(any(h.get("Private-Token") == "glt" or h.get("PRIVATE-TOKEN") == "glt" for _, h in SEEN))
+
+    def test_list_dir(self):
+        repo = GitLabSource(self.cfg).list_repos()[0]
+        self.assertEqual(repo.list_dir("amd/src"), ["app.js"])
+        self.assertIsNone(repo.list_dir("amd/build"))  # GitLab answers [] for a missing folder.
 
 
 if __name__ == "__main__":

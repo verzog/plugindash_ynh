@@ -97,6 +97,11 @@ class FakeRepo(RepoView):
             return self._tag_files.get(ref, {}).get(path)
         return self._files.get(path)
 
+    def list_dir(self, path):
+        prefix = path.rstrip("/") + "/"
+        names = [p[len(prefix):] for p in self._files if p.startswith(prefix) and "/" not in p[len(prefix):]]
+        return names or None
+
     def file_url(self, path, ref=None):
         return f"{self.html_url}/blob/{ref or self.default_branch}/{path}"
 

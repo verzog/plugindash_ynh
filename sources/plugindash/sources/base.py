@@ -45,6 +45,10 @@ class RepoView:
     def file_url(self, path: str, ref: str | None = None) -> str:
         raise NotImplementedError
 
+    def list_dir(self, path: str) -> list[str] | None:
+        """File names directly inside `path` on the default branch, or None when it doesn't exist."""
+        raise NotImplementedError
+
     def readme(self) -> str | None:
         for name in ("README.md", "README.txt", "README", "readme.md"):
             text = self.file(name)

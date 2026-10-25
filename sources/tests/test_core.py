@@ -439,6 +439,39 @@ class LangStringsTests(unittest.TestCase):
         self.assertEqual(levels(run_check("lang_strings", healthy_repo("v/r", "mod_board"))), [OK])
 
 
+class AmdAndDormantTests(unittest.TestCase):
+    def test_amd_builds(self):
+        repo = healthy_repo("v/r", "local_x")
+        self.assertEqual(run_check("amd_build", repo), [])  # No JavaScript.
+        repo._files["amd/src/app.js"] = "define([], function() {});"
+        repo._files["amd/src/util.js"] = "define([], function() {});"
+        repo._files["amd/build/app.min.js"] = "x"
+        repo._files["amd/build/app.min.js.map"] = "x"
+        message = run_check("amd_build", repo)[0].message
+        self.assertIn("util.min.js", message)
+        self.assertIn("util.min.js.map", message)
+        repo._files["amd/build/util.min.js"] = repo._files["amd/build/util.min.js.map"] = "x"
+        self.assertEqual(levels(run_check("amd_build", repo)), [OK])
+
+    def test_dormant_private_repo_schedules(self):
+        cron = CI_YAML.replace("env:", "on:\n  schedule:\n    - cron: '0 3 * * 1'\nenv:")
+        dormant = ci_repo(cron, private=True)
+        dormant.pushed_at = NOW - timedelta(days=120)
+        message = run_check("dormant_actions", dormant)[0].message
+        self.assertIn("No push for 120 days", message)
+        self.assertIn("Moodle Plugin CI", message)
+        quiet = healthy_repo("v/r", "local_x", private=True)
+        quiet.pushed_at = NOW - timedelta(days=120)
+        self.assertEqual(levels(run_check("dormant_actions", quiet)), [OK])
+        quiet._files[".github/dependabot.yml"] = "version: 2\n"
+        self.assertIn("Dependabot", run_check("dormant_actions", quiet)[0].message)
+        public = ci_repo(cron)
+        public.pushed_at = NOW - timedelta(days=120)
+        self.assertEqual(run_check("dormant_actions", public), [])
+        recent = ci_repo(cron, private=True)
+        self.assertEqual(run_check("dormant_actions", recent), [])
+
+
 class RunnerTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
