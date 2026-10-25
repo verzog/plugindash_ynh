@@ -15,7 +15,8 @@ DESCRIPTION = ("Red if an in-house SCCA plugin doesn't exclude phpcs's GPL boile
 ORDER = 51
 
 BOILERPLATE_SNIFF = "moodle.Files.BoilerplateComment"
-PHPCS_FILES = (".phpcs.xml", "phpcs.xml")
+# Every file name phpcs picks up by itself.
+PHPCS_FILES = (".phpcs.xml", "phpcs.xml", ".phpcs.xml.dist", "phpcs.xml.dist")
 _COPYRIGHT = re.compile(r"@copyright\s+(.+)")
 
 
