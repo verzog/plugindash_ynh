@@ -98,9 +98,12 @@ def gh_routes():
             "published_at": "2026-10-01T00:00:00Z",
             "assets": [{"name": "local_x-v1.3.0.zip", "browser_download_url": "https://x/local_x-v1.3.0.zip"}],
         },
-        f"{repo}/releases": [
+        f"{repo}/releases": (200, [
             {"tag_name": "v1.3.0", "html_url": "https://github.com/x/releases/tag/v1.3.0"},
             {"tag_name": "v1.3.0-rc1", "prerelease": True},
+        ], {"Link": f'<{BASE}{repo}/releases?page=2>; rel="next"'}),
+        f"{repo}/releases?page=2": [
+            {"tag_name": "v1.3.0-rc0", "draft": True},
             {"tag_name": "v1.2.0", "html_url": "https://github.com/x/releases/tag/v1.2.0"},
         ],
         f"{repo}/compare/v1.3.0...main": {"ahead_by": 2},
@@ -152,7 +155,7 @@ class GitHubSourceTests(unittest.TestCase):
         rel = repo.latest_release()
         self.assertEqual((rel.tag, rel.assets[0]["name"]), ("v1.3.0", "local_x-v1.3.0.zip"))
         self.assertEqual(repo.commits_since("v1.3.0"), 2)
-        self.assertEqual(repo.previous_release().tag, "v1.2.0")  # The pre-release is skipped.
+        self.assertEqual(repo.previous_release().tag, "v1.2.0")  # Pre-releases and drafts skipped, page 2 read.
         self.assertEqual((len(repo.open_issues()), len(repo.open_pull_requests())), (1, 1))
         wf = repo.workflows()[0]
         run = repo.latest_run(wf)

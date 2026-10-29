@@ -94,10 +94,11 @@ class GitHubRepo(RepoView):
         if latest is None:
             return None
         try:
-            data = self.client.get_json(f"{self._api}/releases", {"per_page": 10})
+            # Every page: drafts and pre-releases can push the previous stable release past the first one.
+            data = self.client.get_paged(f"{self._api}/releases", {"per_page": 100})
         except NotFound:
             return None
-        published = [r for r in data or [] if not r.get("draft") and not r.get("prerelease")]
+        published = [r for r in data if not r.get("draft") and not r.get("prerelease")]
         tags = [r["tag_name"] for r in published]
         if latest.tag not in tags or tags.index(latest.tag) + 1 >= len(tags):
             return None

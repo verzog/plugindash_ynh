@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..http import HttpError
 from ..model import INFO, OK, RED, Finding
 from ..moodle import normalise_tag, release_text
 from ._util import version_at
@@ -42,8 +43,13 @@ def run(repo, plugin, ctx):
             ID, RED, f"$plugin->version on {repo.default_branch} ({main_version}) is older than in {rel.tag} "
             f"({tag_version})", repo.file_url("version.php"),
         ))
-    previous = repo.previous_release()
-    before = version_at(repo, previous.tag) if previous else None
+    try:
+        previous = repo.previous_release()
+        before = version_at(repo, previous.tag) if previous else None
+    except HttpError as err:
+        # Keep the findings above: a failed look-back mustn't hide a mismatch already found.
+        findings.append(Finding(ID, INFO, f"Couldn't compare with the previous release ({err})"))
+        return findings
     before_version = before.get("version") if before else None
     if isinstance(tag_version, int) and isinstance(before_version, int) and tag_version <= before_version:
         findings.append(Finding(
