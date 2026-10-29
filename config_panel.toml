@@ -138,13 +138,13 @@ services = []
 
     [main.alerts]
     name = "Alerts"
-    help = "Fill in one or more channels. Alerts are sent after the daily check when a plugin's colour changes."
+    help = "Fill in one or more channels. Alerts are sent after a check when a plugin gets a new problem, listing each one with what to do."
 
         [main.alerts.alert_on]
         ask = "Send an alert"
         type = "select"
-        choices.worse = "When a plugin gets worse"
-        choices.any = "On any colour change"
+        choices.worse = "When a new problem appears (and say what was fixed)"
+        choices.any = "When a problem appears or is fixed"
         choices.none = "Never"
 
         [main.alerts.ntfy_url]

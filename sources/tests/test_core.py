@@ -25,7 +25,8 @@ from plugindash.modes import MODE_A, MODE_B, mode_label, plugin_mode  # noqa: E4
 from plugindash.moodle import branch_label, normalise_tag, version_key  # noqa: E402
 from plugindash.output import prometheus  # noqa: E402
 from plugindash.phpparse import is_moodle_plugin, parse_version_php, strip_comments  # noqa: E402
-from plugindash.runner import changes_to_alert, collect, run  # noqa: E402
+from plugindash import alerts  # noqa: E402
+from plugindash.runner import collect, run  # noqa: E402
 
 CHECKS = {c.ID: c for c in load_checks()}
 
@@ -569,6 +570,55 @@ class FixHintTests(unittest.TestCase):
         self.assertIn("Fine-grained tokens", blocked[0]["fix"])
 
 
+def alert_repo(name, status, problems):
+    """A dashboard entry with (check, level, message) problems."""
+    return {"full_name": f"v/{name}", "name": name, "component": name, "status": status,
+            "findings": [{"check": c, "level": lv, "message": m, "fix": f"Fix {c}", "url": None}
+                         for c, lv, m in problems]}
+
+
+class AlertTests(unittest.TestCase):
+    def setUp(self):
+        self.before = alerts.next_baseline({}, [
+            alert_repo("a", "amber", [("issues", "amber", "3 open issues")]),
+            alert_repo("b", "red", [("ci_status", "red", "CI is failing")]),
+        ])
+
+    def test_counts_alone_are_not_news_but_rising_levels_are(self):
+        same = [alert_repo("a", "amber", [("issues", "amber", "4 open issues")])]
+        self.assertEqual(alerts.changes(self.before, same), [])
+        risen = [alert_repo("a", "red", [("issues", "red", "3 open issues")])]
+        self.assertEqual(len(alerts.changes(self.before, risen)[0]["new"]), 1)
+
+    def test_new_and_fixed_and_modes(self):
+        now = [alert_repo("a", "green", []), alert_repo("b", "red", [("ci_status", "red", "CI is failing"),
+                                                                     ("release_zip", "red", "No zip")])]
+        found = alerts.changes(self.before, now)
+        counts = {c["repo"]["name"]: (len(c["new"]), len(c["fixed"])) for c in found}
+        self.assertEqual(counts, {"a": (0, 1), "b": (1, 0)})
+        self.assertTrue(alerts.worth_sending(found, "worse"))
+        fixed_only = [c for c in found if not c["new"]]
+        self.assertFalse(alerts.worth_sending(fixed_only, "worse"))
+        self.assertTrue(alerts.worth_sending(fixed_only, "any"))
+        self.assertFalse(alerts.worth_sending(found, "none"))
+        title, body, priority = alerts.alert_text(found)
+        self.assertEqual(title, "Plugin dashboard: 1 new problem in 1 plugin, 1 fixed")
+        self.assertIn("b: still needs fixing, 1 new problem\n  ✗ No zip\n    What to do: Fix release_zip", body)
+        self.assertIn("Fixed since the last check:\n  ✓ a: 3 open issues", body)
+        self.assertEqual(priority, "high")
+
+    def test_grey_repos_are_skipped_and_keep_their_problems(self):
+        unreadable = [alert_repo("b", "grey", [])]
+        self.assertEqual(alerts.changes(self.before, unreadable), [])
+        self.assertEqual(alerts.next_baseline(self.before, unreadable)["v/b"], self.before["v/b"])
+
+    def test_long_alerts_are_cut_short(self):
+        many = [alert_repo(f"p{i}", "amber", [("issues", "amber", "1 open issue")]) for i in range(13)]
+        title, body, _ = alerts.alert_text(alerts.changes({}, many), "https://dash.example/plugins")
+        self.assertIn("13 new problems in 13 plugins", title)
+        self.assertIn("…and 3 more plugins with new problems: https://dash.example/plugins", body)
+
+
 class RunnerTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -675,8 +725,12 @@ class RunnerTests(unittest.TestCase):
         with open(log_path) as handle:
             sent = [json.loads(line) for line in handle]
         self.assertEqual(len(sent), 1)
-        self.assertIn("green → red", sent[0][1])
-        self.assertEqual(sent[0][2], "high")
+        title, body, priority = sent[0]
+        self.assertEqual(title, "Plugin dashboard: 1 new problem in 1 plugin")
+        self.assertIn("local_x: now needs fixing (was healthy)", body)
+        self.assertIn("✗ 'Moodle Plugin CI' is failing on main", body)
+        self.assertIn("What to do: Open the failing run", body)
+        self.assertEqual(priority, "high")
         for name in ("status.json", "history.json", "metrics"):
             self.assertTrue(os.path.exists(os.path.join(self.cfg["www_dir"], name)), name)
         with open(os.path.join(self.cfg["www_dir"], "history.json")) as handle:
@@ -712,7 +766,7 @@ class RunnerTests(unittest.TestCase):
         with open(log_path) as handle:
             sent = [json.loads(line) for line in handle]
         self.assertEqual(len(sent), 1)
-        self.assertIn("green → red", sent[0])
+        self.assertIn("now needs fixing", sent[0])
 
     def test_fatal_run_keeps_previous_data(self):
         repo = healthy_repo("verzog/moodle-local_x", "local_x")
@@ -796,14 +850,31 @@ class RunnerTests(unittest.TestCase):
         self.assertIn("read_api", entry["summary"])
         self.assertNotIn("Contents", entry["summary"])
 
-    def test_alert_modes(self):
-        repos = [{"full_name": "a", "status": "amber", "summary": ""}, {"full_name": "b", "status": "green",
-                                                                         "summary": ""}]
-        prev = {"a": "green", "b": "red"}
-        self.assertEqual(len(changes_to_alert(prev, repos, "worse")), 1)
-        self.assertEqual(len(changes_to_alert(prev, repos, "any")), 2)
-        self.assertEqual(changes_to_alert(prev, repos, "none"), [])
-        self.assertEqual(changes_to_alert({}, repos, "any"), [])
+    def test_already_red_plugin_alerts_on_a_second_problem(self):
+        folder = os.path.join(self.cfg["extensions_dir"], "notify")
+        os.makedirs(folder)
+        log_path = os.path.join(self.tmp.name, "sent.json")
+        with open(os.path.join(folder, "capture.py"), "w") as handle:
+            handle.write(
+                "import json\nID = 'capture'\n"
+                "def configured(cfg):\n    return True\n"
+                "def send(cfg, title, body, priority, url):\n"
+                f"    with open({log_path!r}, 'a') as out:\n"
+                "        out.write(json.dumps([title, body]) + '\\n')\n"
+            )
+        failing = {"runs": {"1": failed_run("r7")}, "jobs": {"r7": [Job("test (MOODLE_503_STABLE)", "failure")]}}
+        run(self.cfg, sources=[FakeSource([healthy_repo("verzog/moodle-local_x", "local_x", **failing)])],
+            directory=FakeDirectory())
+        self.assertFalse(os.path.exists(log_path))  # First run: remembered quietly.
+        worse = healthy_repo("verzog/moodle-local_x", "local_x", release=release("v1.3.0", "local_x", assets=False),
+                             **failing)
+        run(self.cfg, sources=[FakeSource([worse])], directory=FakeDirectory())
+        with open(log_path) as handle:
+            title, body = json.loads(handle.readline())
+        self.assertEqual(title, "Plugin dashboard: 1 new problem in 1 plugin")
+        self.assertIn("still needs fixing, 1 new problem", body)
+        self.assertIn("has no zip attached", body)
+        self.assertNotIn("is failing", body)  # Already reported, so not repeated.
 
     def test_prometheus_output(self):
         status = collect(self.cfg, sources=[FakeSource(sample_repos())], directory=sample_directory(), now=NOW)

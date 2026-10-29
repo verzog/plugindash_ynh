@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -29,6 +30,19 @@ CREATE INDEX IF NOT EXISTS statuses_repo ON statuses(repo);
 CREATE TABLE IF NOT EXISTS alert_baseline (
     repo TEXT PRIMARY KEY,
     status TEXT NOT NULL
+);
+-- The problems (red/amber findings) you were last told about, per repo. Alerts report what's new or gone
+-- compared with this. It replaces alert_baseline, which is no longer read.
+CREATE TABLE IF NOT EXISTS alert_problems (
+    repo TEXT NOT NULL,
+    key TEXT NOT NULL,
+    problem TEXT NOT NULL,  -- JSON: check, level, message, fix, url.
+    PRIMARY KEY (repo, key)
+);
+-- Small facts the app remembers between runs, such as whether alert_problems has been filled yet.
+CREATE TABLE IF NOT EXISTS meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 """
 
@@ -59,6 +73,32 @@ class History:
     def set_alert_baseline(self, statuses: dict[str, str]) -> None:
         self.db.execute("DELETE FROM alert_baseline")
         self.db.executemany("INSERT INTO alert_baseline (repo, status) VALUES (?, ?)", list(statuses.items()))
+        self.db.commit()
+
+    def get_meta(self, key: str) -> str | None:
+        row = self.db.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        return row[0] if row else None
+
+    def set_meta(self, key: str, value: str) -> None:
+        self.db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
+        self.db.commit()
+
+    def alert_problems(self) -> dict[str, dict[str, dict[str, Any]]] | None:
+        """Problems last alerted about, per repo; None until they've been stored once."""
+        if self.get_meta("alert_problems_saved") is None:
+            return None
+        result: dict[str, dict[str, dict[str, Any]]] = {}
+        for repo, key, problem in self.db.execute("SELECT repo, key, problem FROM alert_problems"):
+            result.setdefault(repo, {})[key] = json.loads(problem)
+        return result
+
+    def set_alert_problems(self, problems: dict[str, dict[str, dict[str, Any]]]) -> None:
+        self.db.execute("DELETE FROM alert_problems")
+        self.db.executemany(
+            "INSERT INTO alert_problems (repo, key, problem) VALUES (?, ?, ?)",
+            [(repo, key, json.dumps(p)) for repo, found in problems.items() for key, p in found.items()],
+        )
+        self.db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('alert_problems_saved', '1')")
         self.db.commit()
 
     def record(self, started: datetime, finished: datetime, ok: bool, error: str | None,
