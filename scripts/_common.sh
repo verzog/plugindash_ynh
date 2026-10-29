@@ -30,6 +30,7 @@ plugindash_set_defaults() {
     ynh_app_setting_set_default --key=timezone --value="UTC"
     ynh_app_setting_set_default --key=run_time --value="06:30"
     ynh_app_setting_set_default --key=alert_on --value="worse"
+    ynh_app_setting_set_default --key=reminder_day --value="mon"
     ynh_app_setting_set_default --key=ntfy_url --value=""
     ynh_app_setting_set_default --key=ntfy_topic --value=""
     ynh_app_setting_set_default --key=ntfy_token --value=""
@@ -112,6 +113,7 @@ plugindash_write_config() {
         PD_MOODLE_MAX_BRANCH="$moodle_max_branch" \
         PD_CI_IGNORE_WORKFLOWS="$ci_ignore_workflows" \
         PD_ALERT_ON="$alert_on" \
+        PD_REMINDER_DAY="$reminder_day" \
         PD_NTFY_URL="$ntfy_url" \
         PD_NTFY_TOPIC="$ntfy_topic" \
         PD_NTFY_TOKEN="$ntfy_token" \

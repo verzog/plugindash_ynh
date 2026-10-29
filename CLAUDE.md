@@ -61,6 +61,9 @@ red, amber, green or grey on a single page. It is for his own use only: one admi
   (findings with `incomplete`: fetch errors, token blocks, check errors). Bodies stay under ntfy's 4 KB
   (`MAX_BYTES`, UTF-8). The first run, and the first after upgrading, only remembers (`meta`
   `alert_problems_saved`). If every channel fails nothing is remembered, so the alert is resent next run.
+- Weekly reminder (`reminder_day`, default `mon`, or `off`): with that day's run, a list of every open
+  problem with its fix; nothing if all is healthy. Sent once per day (`meta` `reminder_last`); a missed one
+  goes out on the next run a week on. Not marked sent if every channel fails.
 - The config panel's `tags` widget splits on spaces. Settings that can hold multi-word values (e.g.
   `ci_ignore_workflows`) must be plain `string` fields, comma-separated.
 - GitHub owners may be entered as a profile URL or `@handle`; they're normalised to the bare login.

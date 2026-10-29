@@ -147,6 +147,19 @@ services = []
         choices.any = "When a problem appears or is fixed"
         choices.none = "Never"
 
+        [main.alerts.reminder_day]
+        ask = "Weekly reminder"
+        type = "select"
+        choices.off = "Off"
+        choices.mon = "Monday"
+        choices.tue = "Tuesday"
+        choices.wed = "Wednesday"
+        choices.thu = "Thursday"
+        choices.fri = "Friday"
+        choices.sat = "Saturday"
+        choices.sun = "Sunday"
+        help = "Once a week, with that day's check, a list of everything still needing work, so nothing is forgotten. Nothing is sent when every plugin is healthy."
+
         [main.alerts.ntfy_url]
         ask = "ntfy server"
         type = "url"

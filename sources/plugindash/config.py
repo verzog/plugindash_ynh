@@ -41,6 +41,7 @@ DEFAULTS: dict[str, Any] = {
     "directory_api": "https://download.moodle.org/api/1.3/pluginfo.php",
     # Alerts.
     "alert_on": "worse",            # "worse", "any" or "none".
+    "reminder_day": "mon",          # Weekly reminder of open problems: "mon".."sun", or "off".
     "ntfy_url": "",
     "ntfy_topic": "",
     "ntfy_token": "",
@@ -53,6 +54,7 @@ DEFAULTS: dict[str, Any] = {
     "matrix_token": "",
 }
 
+REMINDER_DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 LIST_KEYS = ("github_owners", "exclude_repos", "disabled_checks", "ci_ignore_workflows")
 
 
@@ -128,6 +130,9 @@ def normalise(raw: dict[str, Any]) -> dict[str, Any]:
         cfg[key] = parse_branch(cfg[key]) or default
     if cfg["alert_on"] not in ("worse", "any", "none"):
         cfg["alert_on"] = "worse"
+    cfg["reminder_day"] = str(cfg["reminder_day"]).strip().lower()[:3]
+    if cfg["reminder_day"] not in REMINDER_DAYS + ("off",):
+        cfg["reminder_day"] = "mon"
     cfg["gitlab_url"] = str(cfg["gitlab_url"]).rstrip("/")
     cfg["public_url"] = str(cfg["public_url"]).rstrip("/")
     return cfg
