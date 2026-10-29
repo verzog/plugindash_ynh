@@ -53,9 +53,14 @@ red, amber, green or grey on a single page. It is for his own use only: one admi
 - Every red/amber finding carries a `fix` ("What to do"). Checks hold their advice in a `FIX` table: the first
   key found in the message wins, `""` is the default; the runner fills it in (`checks.fix_for`). A test fails
   if a key matches nothing in its check, or a sample problem has no fix.
-- Alerts compare against the `alert_baseline` table (colours you were last told about), not the last
-  run. If every channel fails, changed repos keep their old baseline colour, so the alert is resent
-  next run. With no channel set up, `alert_on = none` or `--no-alerts`, the baseline just moves on.
+- Alerts are about problems (red/amber findings), not colours (`alerts.py`). Each is remembered in
+  `alert_problems` under its check + message with standalone counts (and their plural "s") blanked, so
+  "31 days" → "32 days" or "2 issues" → "1 issue" isn't news but a new tag is; amber rising to red counts as
+  new. "worse" (default) alerts when anything is new and adds a "Fixed since the last check" list; "any" also
+  alerts on fixes alone. Grey repos are skipped and keep their old problems; so do checks that didn't finish
+  (findings with `incomplete`: fetch errors, token blocks, check errors). Bodies stay under ntfy's 4 KB
+  (`MAX_BYTES`, UTF-8). The first run, and the first after upgrading, only remembers (`meta`
+  `alert_problems_saved`). If every channel fails nothing is remembered, so the alert is resent next run.
 - The config panel's `tags` widget splits on spaces. Settings that can hold multi-word values (e.g.
   `ci_ignore_workflows`) must be plain `string` fields, comma-separated.
 - GitHub owners may be entered as a profile URL or `@handle`; they're normalised to the bare login.
@@ -76,7 +81,7 @@ sources/
     checks/              one module per check (ID, TITLE, DESCRIPTION, ORDER, run(repo, plugin, ctx))
     sources/             base.py (the RepoView interface), github.py, gitlab.py
     notify/              ntfy.py, mail.py, matrix.py
-    phpparse.py, moodle.py, history.py (SQLite: runs, statuses, alert_baseline), output.py, http.py, config.py
+    phpparse.py, moodle.py, history.py (SQLite: runs, statuses, alert_problems, meta), output.py, http.py, config.py
   www/                   static page: index.html, app.js, style.css, favicon.svg (reads status.json +
                          history.json; also Export CSV / Export PDF and Run check now)
   tests/                 fakes.py, test_core.py, test_sources.py, make_preview.py

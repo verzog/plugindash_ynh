@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import __version__
+from . import __version__, alerts
 from .checks import Context, fix_for, load_checks
 from .history import History
 from .http import AuthError, HttpError, NotFound
@@ -82,7 +82,7 @@ def check_repo(repo, checks, ctx: Context) -> dict[str, Any] | None:
             except AuthError as err:
                 findings.append(Finding(
                     check.ID, AMBER, f"{check.TITLE}: couldn't run, the token lacks permission (HTTP {err.status})",
-                    overridable=False, fix=TOKEN_FIX.get(repo.source),
+                    overridable=False, fix=TOKEN_FIX.get(repo.source), incomplete=True,
                 ))
             except NotFound:
                 # GitHub answers 404 rather than 403 when a fine-grained token lacks a permission
@@ -90,12 +90,13 @@ def check_repo(repo, checks, ctx: Context) -> dict[str, Any] | None:
                 findings.append(Finding(
                     check.ID, AMBER, f"{check.TITLE}: couldn't run, the server returned 404 "
                     "(usually a missing token permission)", overridable=False, fix=TOKEN_FIX.get(repo.source),
+                    incomplete=True,
                 ))
             except HttpError as err:
-                findings.append(Finding(check.ID, INFO, f"{check.TITLE}: couldn't fetch data ({err})"))
+                findings.append(Finding(check.ID, INFO, f"{check.TITLE}: couldn't fetch data ({err})", incomplete=True))
             except Exception as err:  # A buggy check must not stop the others.
                 log.exception("Check %s failed on %s", check.ID, repo.full_name)
-                findings.append(Finding(check.ID, INFO, f"{check.TITLE}: check error ({err})"))
+                findings.append(Finding(check.ID, INFO, f"{check.TITLE}: check error ({err})", incomplete=True))
     apply_overrides(findings, ctx.cfg["severity_overrides"])
     findings.sort(key=lambda f: (-LEVEL_RANK[f.level], getattr(f, "check", "")))
     rel = None
@@ -260,30 +261,6 @@ def collect(cfg: dict[str, Any], sources=None, directory=None, now: datetime | N
     }
 
 
-def changes_to_alert(previous: dict[str, str], repos: list[dict[str, Any]], mode: str) -> list[dict[str, Any]]:
-    if mode == "none" or not previous:
-        return []
-    changes = []
-    for repo in repos:
-        old = previous.get(repo["full_name"])
-        new = repo["status"]
-        if old is None or old == new:
-            continue
-        if mode == "any" or STATUS_RANK[new] > STATUS_RANK[old]:
-            changes.append({"repo": repo, "old": old, "new": new})
-    return changes
-
-
-def alert_text(changes: list[dict[str, Any]]) -> tuple[str, str, str]:
-    worse = sum(1 for c in changes if STATUS_RANK[c["new"]] > STATUS_RANK[c["old"]])
-    title = f"Plugin dashboard: {len(changes)} repo{'s' if len(changes) != 1 else ''} changed"
-    if worse:
-        title += f" ({worse} worse)"
-    lines = [f"{c['repo']['full_name']}: {c['old']} → {c['new']}. {c['repo']['summary']}" for c in changes]
-    priority = "high" if any(c["new"] == "red" for c in changes) else "default"
-    return title, "\n".join(lines), priority
-
-
 def run(cfg: dict[str, Any], send_alerts: bool = True, sources=None, directory=None) -> dict[str, Any]:
     """Collect and write the dashboard, guarded by a lock so the daily timer and the
     on-demand 'Run check now' button never collect at the same time."""
@@ -318,7 +295,7 @@ def _run(cfg: dict[str, Any], send_alerts: bool = True, sources=None, directory=
     www, data = cfg["www_dir"], cfg["data_dir"]
     history = History(os.path.join(data, "history.sqlite"))
     try:
-        previous = history.alert_baseline()
+        previous = history.alert_problems()
         try:
             status = collect(cfg, sources=sources, directory=directory, now=started)
         except FatalRunError as err:
@@ -348,18 +325,20 @@ def _run(cfg: dict[str, Any], send_alerts: bool = True, sources=None, directory=
         write_json(os.path.join(www, "history.json"), history.recent(30, _zone(cfg)))
         write_atomic(os.path.join(www, "metrics"), prometheus(status))
 
-        changes = changes_to_alert(previous, status["repos"], cfg["alert_on"])
+        # The first run (or the first after upgrading to problem-based alerts) only remembers what it found.
+        found = alerts.changes(previous, status["repos"]) if previous is not None else []
         status["alerts"] = {}
-        baseline = {r["full_name"]: r["status"] for r in status["repos"]}
-        if changes and send_alerts:
-            title, body, priority = alert_text(changes)
+        remember = True
+        if send_alerts and alerts.worth_sending(found, cfg["alert_on"]):
+            title, body, priority = alerts.alert_text(found, cfg.get("public_url") or None)
             status["alerts"] = send_all(cfg, title, body, priority, cfg.get("public_url") or None)
             if status["alerts"] and "sent" not in status["alerts"].values():
-                # Every channel failed: keep the old colours so the next run sends this alert again.
+                # Every channel failed: remember nothing, so the next run sends this alert again.
                 log.warning("No alert channel delivered; the alert will be retried on the next run")
-                for change in changes:
-                    baseline[change["repo"]["full_name"]] = change["old"]
-        history.set_alert_baseline(baseline)
+                remember = False
+        if remember:
+            history.set_alert_problems(alerts.next_baseline(previous or {}, status["repos"]))
+        changes = found
         log.info(
             "Done: %d repos (%s) in %ss, %d API calls; %d alert-worthy changes",
             len(status["repos"]), ", ".join(f"{v} {k}" for k, v in status["counts"].items()),
