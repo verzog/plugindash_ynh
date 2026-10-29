@@ -237,12 +237,7 @@
   function plugin(repo) {
     var b = el('button', 'plugin-link', repo.component || repo.name);
     b.type = 'button';
-    b.addEventListener('click', function () {
-      state.view = 'list';
-      store('plugindash.view', 'list');
-      renderViews();
-      openRow(repo.full_name);
-    });
+    b.addEventListener('click', function () { openRow(repo.full_name); });
     return b;
   }
 
@@ -256,9 +251,15 @@
     shown.forEach(function (repo) {
       problems(repo).forEach(function (f) { (groups[f.check] = groups[f.check] || []).push([repo, f]); });
     });
+    /* How many plugins a group covers: one plugin can have several problems from the same check. */
+    var plugins = function (id) {
+      var names = {};
+      groups[id].forEach(function (x) { names[x[0].full_name] = true; });
+      return Object.keys(names).length;
+    };
     var ids = Object.keys(groups).sort(function (a, b) {
       var worst = function (id) { return Math.max.apply(null, groups[id].map(function (x) { return LEVEL_RANK[x[1].level]; })); };
-      return worst(b) - worst(a) || groups[b].length - groups[a].length || a.localeCompare(b);
+      return worst(b) - worst(a) || plugins(b) - plugins(a) || a.localeCompare(b);
     });
     if (!ids.length) { board.appendChild(el('p', 'board-note', 'Nothing to do: no problems in the plugins shown.')); }
     ids.forEach(function (id) {
@@ -267,7 +268,8 @@
       var card = el('section', 'todo ' + (red ? 'red' : 'amber'));
       var head = el('h2');
       head.appendChild(el('span', 'pill ' + (red ? 'red' : 'amber'), red ? 'Needs fixing' : 'Needs attention'));
-      head.appendChild(el('span', null, checkTitle(id) + ' · ' + items.length + ' plugin' + (items.length === 1 ? '' : 's')));
+      var count = plugins(id);
+      head.appendChild(el('span', null, checkTitle(id) + ' · ' + count + ' plugin' + (count === 1 ? '' : 's')));
       card.appendChild(head);
       var fixes = items.map(function (x) { return x[1].fix; }).filter(Boolean);
       var shared = fixes.length === items.length && fixes.every(function (f) { return f === fixes[0]; });
@@ -298,6 +300,12 @@
     return td;
   }
 
+  /* A cell's words for a finding, or "couldn't check" when its check didn't finish. */
+  function label(f, words) {
+    if (!f) { return '—'; }
+    return f.incomplete ? 'couldn\'t check' : words(f);
+  }
+
   /* Releases: where each plugin's release stands, from version.php to moodle.org. */
   function renderReleases(board, shown) {
     var table = el('table', 'grid-table');
@@ -315,31 +323,32 @@
       tr.appendChild(cell(repo.release || '—'));
       tr.appendChild(cell(repo.latest_tag || 'none', repo.latest_tag ? null : 'info'));
       var m = finding(repo, 'release_match');
-      tr.appendChild(m && m.level !== 'info' ? cell(m.level === 'ok' ? '✓' : '✗ mismatch', m.level, m.message) : cell('—'));
+      tr.appendChild(m && (m.level !== 'info' || m.incomplete) ?
+        cell(label(m, function (f) { return f.level === 'ok' ? '✓' : '✗ mismatch'; }), m.level, m.message) : cell('—'));
       var z = finding(repo, 'release_zip');
-      var zip = '—';
-      if (z) {
-        zip = z.level === 'ok' ? '✓ attached' : z.message.indexOf('not needed') !== -1 ? 'not needed' :
-          z.message.indexOf('no zip') !== -1 ? '✗ missing' : 'misnamed';
-      }
+      var zip = label(z, function (f) {
+        return f.level === 'ok' ? '✓ attached' : f.message.indexOf('not needed') !== -1 ? 'not needed' :
+          f.message.indexOf('no zip') !== -1 ? '✗ missing' : /^Zip is named/.test(f.message) ? 'misnamed' : 'unknown';
+      });
       tr.appendChild(cell(zip, z ? z.level : null, z ? z.message : null));
       var u = finding(repo, 'unreleased');
-      var unreleased = '—';
-      if (u) {
-        var bumped = /^version\.php says (\S+)/.exec(u.message);
-        var commits = /^(\d+ commits?)/.exec(u.message);
-        unreleased = u.level === 'ok' ? 'none' : bumped ? bumped[1] + ' not published' : commits ? commits[1] : u.message;
-      }
+      var unreleased = label(u, function (f) {
+        var bumped = /^version\.php says (\S+)/.exec(f.message);
+        var commits = /^(\d+ commits?)/.exec(f.message);
+        return /^Nothing unreleased/.test(f.message) ? 'none' : bumped ? bumped[1] + ' not published' :
+          commits ? commits[1] : f.message;
+      });
       tr.appendChild(cell(unreleased, u ? u.level : null, u ? u.message : null));
       var d = finding(repo, 'plugins_directory');
-      var listed = '—';
-      if (d) {
-        var behind = /^Directory has ([^;]+);/.exec(d.message);
-        var as = /^Listed as (.+)$/.exec(d.message);
-        listed = d.level === 'red' ? '✗ listed (in-house)' : /^Not in the public/.test(d.message) ? 'not listed (in-house)' :
-          behind ? 'behind (' + behind[1] + ')' : /^Directory is up to date/.test(d.message) ? '✓ up to date' :
-          /^Not listed/.test(d.message) ? 'not listed' : as ? 'listed (' + as[1] + ')' : 'unknown';
-      }
+      // Read from the message, not the level, which a severity override can change.
+      var listed = label(d, function (f) {
+        var behind = /^Directory has ([^;]+);/.exec(f.message);
+        var as = /^Listed as (.+)$/.exec(f.message);
+        return /^In-house .* is listed publicly/.test(f.message) ? '✗ listed (in-house)' :
+          /^Not in the public/.test(f.message) ? 'not listed (in-house)' :
+          behind ? 'behind (' + behind[1] + ')' : /^Directory is up to date/.test(f.message) ? '✓ up to date' :
+          /^Not listed/.test(f.message) ? 'not listed' : as ? 'listed (' + as[1] + ')' : 'unknown';
+      });
       tr.appendChild(cell(listed, d ? d.level : null, d ? d.message : null));
       tr.appendChild(cell(repo.supported ? repo.supported[0] + '–' + repo.supported[1] : '—'));
       table.appendChild(tr);
@@ -366,9 +375,12 @@
         var found = repo.findings.filter(function (f) { return g[1].indexOf(f.check) !== -1; });
         var td = el('td', 'c');
         var worst = found.reduce(function (a, f) { return LEVEL_RANK[f.level] > LEVEL_RANK[a] ? f.level : a; }, 'ok');
-        var dot = el('span', 'dot ' + (!found.length ? 'none' : worst === 'red' || worst === 'amber' ? worst : 'green'));
+        var passed = found.some(function (f) { return f.level === 'ok'; });
+        // Only notes (e.g. security alerts unavailable on GitLab) means not checked, not healthy.
+        var shade = worst === 'red' || worst === 'amber' ? worst : passed ? 'green' : 'none';
+        var dot = el('span', 'dot ' + shade);
         dot.title = found.length ? found.map(function (f) { return f.message; }).join('\n') : 'Not checked';
-        dot.setAttribute('aria-label', g[0] + ': ' + (!found.length ? 'not checked' : worst));
+        dot.setAttribute('aria-label', g[0] + ': ' + (shade === 'none' ? 'not checked' : shade === 'green' ? 'ok' : worst));
         td.appendChild(dot);
         tr.appendChild(td);
       });
@@ -420,6 +432,11 @@
   }
 
   function openRow(fullName) {
+    if (state.view !== 'list') {  // The rack and the plugin names in other views both land here.
+      state.view = 'list';
+      store('plugindash.view', 'list');
+      renderViews();
+    }
     state.filter = 'all';
     state.query = '';
     document.getElementById('search').value = '';
