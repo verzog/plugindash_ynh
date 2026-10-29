@@ -8,7 +8,8 @@ from ._util import version_at
 
 ID = "release_match"
 TITLE = "Release matches version.php"
-DESCRIPTION = "Red if the latest tag (minus its 'v') differs from $plugin->release at that tag, or main goes backwards."
+DESCRIPTION = ("Red if the latest tag (minus its 'v') differs from $plugin->release at that tag, main goes "
+               "backwards, or the latest release didn't raise $plugin->version (so Moodle won't upgrade).")
 ORDER = 20
 
 
@@ -40,5 +41,13 @@ def run(repo, plugin, ctx):
         findings.append(Finding(
             ID, RED, f"$plugin->version on {repo.default_branch} ({main_version}) is older than in {rel.tag} "
             f"({tag_version})", repo.file_url("version.php"),
+        ))
+    previous = repo.previous_release()
+    before = version_at(repo, previous.tag) if previous else None
+    before_version = before.get("version") if before else None
+    if isinstance(tag_version, int) and isinstance(before_version, int) and tag_version <= before_version:
+        findings.append(Finding(
+            ID, RED, f"{rel.tag} has $plugin->version {tag_version}, not higher than {previous.tag} "
+            f"({before_version}), so Moodle won't offer the upgrade", rel.url,
         ))
     return findings

@@ -108,6 +108,9 @@ class FakeRepo(RepoView):
     def latest_release(self):
         return self._release
 
+    def previous_release(self):
+        return getattr(self, "_previous", None)
+
     def commits_since(self, tag):
         return self._commits
 

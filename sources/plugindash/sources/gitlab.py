@@ -90,6 +90,17 @@ class GitLabRepo(RepoView):
         )
 
     @cached
+    def previous_release(self) -> Release | None:
+        data = self.client.get_json(f"{self._api}/releases", {"per_page": 2, "order_by": "released_at"})
+        if not data or len(data) < 2:
+            return None
+        rel = data[1]
+        return Release(
+            tag=rel["tag_name"], name=rel.get("name") or rel["tag_name"],
+            url=(rel.get("_links") or {}).get("self"), published_at=parse_time(rel.get("released_at")),
+        )
+
+    @cached
     def commits_since(self, tag: str) -> int:
         data = self.client.get_json(
             f"{self._api}/repository/compare", {"from": tag, "to": self.default_branch, "straight": "false"},
