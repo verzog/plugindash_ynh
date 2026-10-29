@@ -8,6 +8,8 @@ It finds plugins by their `version.php` and checks, for each one:
 - **Licence**: whether the `@license` tag, the `LICENSE` file and the README agree.
 - **Housekeeping**: open issues and pull requests, Dependabot security alerts, and whether the Moodle plugins directory listing is behind your latest release.
 
+The page has four views: a List of plugins, a To do list grouped by problem, a Releases table and a Grid of checks.
+
 It can also alert you by ntfy, email or Matrix when a plugin gets a new problem (with what to do about it), and publish metrics for Prometheus/Grafana. You can add your own checks and alert channels as small Python files.
 
 It works with GitHub, and with a self-hosted GitLab.

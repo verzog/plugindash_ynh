@@ -86,7 +86,7 @@ sources/
     notify/              ntfy.py, mail.py, matrix.py
     phpparse.py, moodle.py, history.py (SQLite: runs, statuses, alert_problems, meta), output.py, http.py, config.py
   www/                   static page: index.html, app.js, style.css, favicon.svg (reads status.json +
-                         history.json; also Export CSV / Export PDF and Run check now)
+                         history.json; views List / To do / Releases / Grid, Export CSV / Export PDF, Run check now)
   tests/                 fakes.py, test_core.py, test_sources.py, make_preview.py
   extensions-example/    copied to $data_dir/extensions on install
 ```
