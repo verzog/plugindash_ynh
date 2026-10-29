@@ -13,6 +13,14 @@ DESCRIPTION = ("Red if the latest tag (minus its 'v') differs from $plugin->rele
                "backwards, or the latest release didn't raise $plugin->version (so Moodle won't upgrade).")
 ORDER = 20
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "has no version.php": "Tag a commit that contains version.php.",
+    "expects $plugin->release": "Set $plugin->release to match the tag, merge, then publish a new release.",
+    "is older than in": "Raise $plugin->version on the default branch above the released one.",
+    "won't offer the upgrade": "Raise $plugin->version above the previous release's and publish a new release.",
+}
+
 
 def run(repo, plugin, ctx):
     rel = repo.latest_release()

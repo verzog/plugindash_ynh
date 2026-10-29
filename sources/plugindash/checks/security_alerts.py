@@ -10,6 +10,12 @@ TITLE = "Security alerts"
 DESCRIPTION = "Red for open critical/high Dependabot alerts; amber for medium/low."
 ORDER = 60
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "critical/high": "Update the affected dependency now (Security, Dependabot).",
+    "medium/low": "Update the dependency, or dismiss the alert with a reason.",
+}
+
 
 def run(repo, plugin, ctx):
     try:

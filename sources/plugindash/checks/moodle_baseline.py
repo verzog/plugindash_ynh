@@ -11,6 +11,13 @@ DESCRIPTION = ("Amber if version.php requires or supports a Moodle older than th
                "or $plugin->release has a leading 'v'.")
 ORDER = 41
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "requires is": "Set $plugin->requires to the lowest supported branch (5.1 is 2025100600).",
+    "supported starts": "Raise the lower bound of $plugin->supported to the lowest supported branch.",
+    "tag carries": "Remove the 'v' from $plugin->release.",
+}
+
 
 def run(repo, plugin, ctx):
     low = ctx.cfg["moodle_min_branch"]

@@ -16,6 +16,12 @@ DESCRIPTION = ("Amber if moodle.org's directory offers an older version than you
                "info only. Red if an in-house SCCA plugin is listed.")
 ORDER = 70
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "listed publicly": "Remove the plugin from moodle.org.",
+    "Directory has": "Upload the latest release zip at moodle.org/plugins.",
+}
+
 
 def run(repo, plugin, ctx):
     if ctx.directory is None:

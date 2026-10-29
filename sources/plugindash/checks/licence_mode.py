@@ -10,6 +10,11 @@ TITLE = "Licence mode"
 DESCRIPTION = "Red if an in-house SCCA (Mode A) plugin is in a public repository. Shows each plugin's mode."
 ORDER = 49
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "": "Make the repository private (Settings, General, Danger Zone).",
+}
+
 
 def run(repo, plugin, ctx):
     mode = plugin_mode(plugin)

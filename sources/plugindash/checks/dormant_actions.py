@@ -12,6 +12,11 @@ DESCRIPTION = ("Amber if a private GitHub repo with no push for 90 days still ha
                "Dependabot, which use up Actions minutes.")
 ORDER = 80
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "": "Disable the scheduled workflows in Actions and remove .github/dependabot.yml, or archive the repository.",
+}
+
 DORMANT_DAYS = 90
 
 

@@ -12,6 +12,14 @@ TITLE = "CI status"
 DESCRIPTION = "Latest CI run on the default branch. Red if it failed; amber if only the Moodle main cell failed."
 ORDER = 10
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "cancelled": "Re-run the workflow.",
+    "only the Moodle main cell": "Check whether Moodle main itself is broken upstream; nothing to do if it is.",
+    "is failing": "Open the failing run, fix the error and push.",
+    "allowed-to-fail cell failed": "Look at the failing cell when convenient; it doesn't block anything.",
+}
+
 _MAIN_CELL = re.compile(r"(^|[\s(,/])main([\s),/]|$)", re.I)
 
 

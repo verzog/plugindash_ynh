@@ -42,6 +42,17 @@ class Context:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+def fix_for(module: ModuleType, message: str) -> str | None:
+    """The check's advice for a finding: the first key of its FIX table found in the message, else the "" entry."""
+    table = getattr(module, "FIX", None)
+    if not isinstance(table, dict):
+        return None
+    for key, text in table.items():
+        if key and key in message:
+            return text
+    return table.get("")
+
+
 def _valid(module: ModuleType) -> bool:
     return all(hasattr(module, attr) for attr in ("ID", "TITLE", "run")) and callable(module.run)
 

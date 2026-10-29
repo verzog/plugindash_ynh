@@ -13,6 +13,14 @@ DESCRIPTION = ("Amber if lang/en has no language file, its keys aren't in LC_ALL
                "use US spellings (color, customize, behavior, enrollment...).")
 ORDER = 52
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "No language file": "Add lang/en/<component>.php with at least $string['pluginname'].",
+    "Repeated": "Delete the duplicate lines.",
+    "LC_ALL=C order": "Sort the $string lines in LC_ALL=C order.",
+    "US spelling": "Use the Australian spelling shown in brackets.",
+}
+
 _KEY = re.compile(r"""^\s*\$string\[\s*(['"])(.+?)\1\s*\]\s*=""", re.M)
 _LITERAL = re.compile(r"'((?:\\.|[^'\\])*)'" + r'|"((?:\\.|[^"\\])*)"', re.S)
 

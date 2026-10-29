@@ -50,6 +50,9 @@ red, amber, green or grey on a single page. It is for his own use only: one admi
   sources. Without Contents, GitHub reports a private repo's `version.php` as 404 too, so such a repo
   looks like a non-plugin and is skipped: a known limit no code can tell apart.
 - A custom check returning a bad level becomes a "check error" for that check only; the run carries on.
+- Every red/amber finding carries a `fix` ("What to do"). Checks hold their advice in a `FIX` table: the first
+  key found in the message wins, `""` is the default; the runner fills it in (`checks.fix_for`). A test fails
+  if a key matches nothing in its check, or a sample problem has no fix.
 - Alerts compare against the `alert_baseline` table (colours you were last told about), not the last
   run. If every channel fails, changed repos keep their old baseline colour, so the alert is resent
   next run. With no channel set up, `alert_on = none` or `--no-alerts`, the baseline just moves on.

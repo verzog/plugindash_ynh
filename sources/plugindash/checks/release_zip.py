@@ -11,6 +11,12 @@ DESCRIPTION = ("Red if the latest release has no .zip; amber if it isn't named <
                "Info only for in-house SCCA plugins.")
 ORDER = 21
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "no zip attached": "Re-run the release workflow's run for that tag (don't attach zips by hand).",
+    "Zip is named": "Fix the release workflow so it builds <component>-<tag>.zip.",
+}
+
 
 def run(repo, plugin, ctx):
     rel = repo.latest_release()

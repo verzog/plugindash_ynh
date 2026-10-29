@@ -10,6 +10,14 @@ TITLE = "Silent CI"
 DESCRIPTION = "Amber if there's no CI, GitHub has disabled a workflow, or CI hasn't run within the stale-days limit."
 ORDER = 11
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "No CI workflow": "Add .github/workflows/moodle-ci.yml, based on moodle-plugin-ci's gha.dist.yml.",
+    "GitHub disabled": "In Actions, open the workflow and choose Enable workflow, then push a commit to run it.",
+    "never finished": "Check Actions for runs that are stuck queued or fail before they start.",
+    "Last CI run": "Re-run the workflow (or push a small change) to confirm CI still passes.",
+}
+
 
 def run(repo, plugin, ctx):
     workflows = ci_workflows(repo, ctx.cfg)

@@ -11,6 +11,14 @@ TITLE = "New Moodle release watch"
 DESCRIPTION = "Amber if the newest stable Moodle is outside $plugin->supported, or the CI matrix doesn't test it."
 ORDER = 40
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "no $plugin->requires": "Add $plugin->requires to version.php (5.1 is 2025100600).",
+    "no $plugin->supported": "Add $plugin->supported = [501, 503]; to version.php.",
+    "is out; supported range": "Test on the new Moodle, then raise $plugin->supported, bump the version and release.",
+    "CI matrix doesn't test": "Add a cell for that branch to the CI matrix.",
+}
+
 
 def run(repo, plugin, ctx):
     findings = []
