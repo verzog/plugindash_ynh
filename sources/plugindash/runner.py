@@ -356,18 +356,26 @@ def _weekly_reminder(cfg: dict[str, Any], history: History, status: dict[str, An
     today = datetime.now(_zone(cfg)).date()
     last_text = history.get_meta("reminder_last")
     last = date.fromisoformat(last_text) if last_text else None
-    if not alerts.reminder_due(today, last, cfg["reminder_day"]):
+    pending = bool(history.get_meta("reminder_pending"))
+    if not alerts.reminder_due(today, last, cfg["reminder_day"], pending):
         return
     message = alerts.reminder_text(status["repos"], cfg.get("public_url") or None)
     if message is None:
-        history.set_meta("reminder_last", today.isoformat())  # Nothing open: nothing to remind about.
+        _reminder_done(history, today)  # Nothing open: nothing to remind about.
         return
     results = send_all(cfg, *message, cfg.get("public_url") or None)
     status["reminder"] = results
     if not results or "sent" in results.values():
-        history.set_meta("reminder_last", today.isoformat())
+        _reminder_done(history, today)
     else:
+        # Remembered separately, so a first reminder that failed is retried on the next run, not next week.
+        history.set_meta("reminder_pending", "1")
         log.warning("No channel delivered the weekly reminder; it will be tried again on the next run")
+
+
+def _reminder_done(history: History, today: date) -> None:
+    history.set_meta("reminder_last", today.isoformat())
+    history.set_meta("reminder_pending", "")
 
 
 def _load(path: str) -> dict[str, Any] | None:

@@ -654,6 +654,8 @@ class ReminderTests(unittest.TestCase):
         tuesday = date(2026, 11, 3)                                            # Monday's was missed.
         self.assertTrue(alerts.reminder_due(tuesday, date(2026, 10, 26), "mon"))
         self.assertFalse(alerts.reminder_due(tuesday, monday, "mon"))
+        self.assertTrue(alerts.reminder_due(tuesday, None, "mon", pending=True))  # Monday's failed: retry.
+        self.assertFalse(alerts.reminder_due(tuesday, tuesday, "mon", pending=True))
 
     def test_reminder_lists_open_problems_with_fixes(self):
         repos = [alert_repo("a", "amber", [("issues", "amber", "3 open issues")]),
@@ -831,6 +833,36 @@ class RunnerTests(unittest.TestCase):
         self.cfg["reminder_day"] = today
         repo = healthy_repo("verzog/moodle-local_x", "local_x", issues=2)
         run(self.cfg, sources=[FakeSource([repo])], directory=FakeDirectory())
+        run(self.cfg, sources=[FakeSource([repo])], directory=FakeDirectory())
+        with open(log_path) as handle:
+            titles = [json.loads(line) for line in handle]
+        self.assertEqual(titles, ["Plugin dashboard: weekly reminder, 1 open problem in 1 plugin"])
+
+    def test_failed_first_reminder_is_retried_on_the_next_run(self):
+        from datetime import datetime, timedelta
+        folder = os.path.join(self.cfg["extensions_dir"], "notify")
+        os.makedirs(folder)
+        log_path = os.path.join(self.tmp.name, "sent.json")
+        flag = os.path.join(self.tmp.name, "channel_down")
+        with open(os.path.join(folder, "flaky.py"), "w") as handle:
+            handle.write(
+                "import json, os\nID = 'flaky'\n"
+                "def configured(cfg):\n    return True\n"
+                "def send(cfg, title, body, priority, url):\n"
+                f"    if os.path.exists({flag!r}):\n"
+                "        raise ConnectionError('channel down')\n"
+                f"    with open({log_path!r}, 'a') as out:\n"
+                "        out.write(json.dumps(title) + '\\n')\n"
+            )
+        now = datetime.now(ZoneInfo(self.cfg["timezone"]))
+        self.cfg["reminder_day"] = now.strftime("%a").lower()
+        repo = healthy_repo("verzog/moodle-local_x", "local_x", issues=2)
+        open(flag, "w").close()
+        run(self.cfg, sources=[FakeSource([repo])], directory=FakeDirectory())
+        self.assertFalse(os.path.exists(log_path))
+        os.remove(flag)
+        # Next run, not the reminder's weekday any more: the failed reminder is still sent.
+        self.cfg["reminder_day"] = (now + timedelta(days=1)).strftime("%a").lower()
         run(self.cfg, sources=[FakeSource([repo])], directory=FakeDirectory())
         with open(log_path) as handle:
             titles = [json.loads(line) for line in handle]

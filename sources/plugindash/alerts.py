@@ -178,13 +178,14 @@ def _priority(with_new: list[dict[str, Any]]) -> str:
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
 
-def reminder_due(today: date, last: date | None, day: str) -> bool:
-    """On the chosen weekday, once; or the next run after a missed one (a week since the last)."""
+def reminder_due(today: date, last: date | None, day: str, pending: bool = False) -> bool:
+    """On the chosen weekday, once; or the next run after a missed one (a week since the last), or after
+    one that no channel delivered (pending)."""
     if day not in WEEKDAYS:
         return False
     if last == today:
         return False
-    if today.weekday() == WEEKDAYS.index(day):
+    if pending or today.weekday() == WEEKDAYS.index(day):
         return True
     return last is not None and (today - last).days >= 7
 
