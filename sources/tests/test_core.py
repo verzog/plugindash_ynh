@@ -487,6 +487,39 @@ class AmdAndDormantTests(unittest.TestCase):
         self.assertEqual(run_check("dormant_actions", recent), [])
 
 
+class ReleaseVersionTests(unittest.TestCase):
+    def test_version_bumped_but_not_released(self):
+        repo = healthy_repo("v/r", "local_x", commits_since=4)
+        repo._files["version.php"] = version_php("local_x", "1.4.0", 2026110100)
+        message = run_check("unreleased", repo)[0].message
+        self.assertIn("version.php says 1.4.0 but the latest release is v1.3.0; publish v1.4.0", message)
+        self.assertIn("4 commits waiting", message)
+        # Commits without a bump keep the plain message.
+        plain = healthy_repo("v/r", "local_x", commits_since=4)
+        self.assertIn("4 commits on main since v1.3.0", run_check("unreleased", plain)[0].message)
+
+    def test_release_that_did_not_raise_the_version(self):
+        repo = healthy_repo("v/r", "local_x", "1.3.0", 2026100100)
+        repo._previous = release("v1.2.0", "local_x")
+        repo._tag_files["v1.2.0"] = {"version.php": version_php("local_x", "1.2.0", 2026100100)}
+        findings = run_check("release_match", repo)
+        self.assertEqual(levels(findings), [OK, RED])
+        self.assertIn("won't offer the upgrade", findings[-1].message)
+        repo._tag_files["v1.2.0"] = {"version.php": version_php("local_x", "1.2.0", 2026090100)}
+        self.assertEqual(levels(run_check("release_match", repo)), [OK])
+
+    def test_failed_look_back_keeps_a_mismatch_red(self):
+        from plugindash.http import HttpError
+
+        def unavailable():
+            raise HttpError(503, "https://api.github.com/repos/v/r/releases", "")
+
+        repo = healthy_repo("v/r", "local_x", "1.3.0")
+        repo._tag_files["v1.3.0"]["version.php"] = version_php("local_x", "1.2.9")
+        repo.previous_release = unavailable
+        self.assertEqual(levels(run_check("release_match", repo)), [INFO, RED])
+
+
 class RunnerTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

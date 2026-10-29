@@ -73,6 +73,7 @@ def tearDownModule():
 def gh_routes():
     repo = "/repos/verzog/moodle-local_x"
     vp = version_php("local_x", "1.3.0", 2026100100)
+    vp_old = version_php("local_x", "1.2.0", 2026090100)
     ROUTES.clear()
     ROUTES.update({
         "/user/repos": (200, [
@@ -87,7 +88,7 @@ def gh_routes():
             {"full_name": "verzog/notes", "name": "notes", "html_url": "https://github.com/verzog/notes",
              "owner": {"login": "verzog"}},
         ],
-        f"{repo}/contents/version.php": lambda h, q: (200, vp, {}),
+        f"{repo}/contents/version.php": lambda h, q: (200, vp_old if q.get("ref") == "v1.2.0" else vp, {}),
         f"{repo}/contents/LICENSE": GPL3_TEXT,
         f"{repo}/contents/README.md": "# X\n\n## License\n\nGPL v3 or later\n",
         f"{repo}/contents/.github/workflows/ci.yml": "matrix: MOODLE_503_STABLE",
@@ -97,6 +98,14 @@ def gh_routes():
             "published_at": "2026-10-01T00:00:00Z",
             "assets": [{"name": "local_x-v1.3.0.zip", "browser_download_url": "https://x/local_x-v1.3.0.zip"}],
         },
+        f"{repo}/releases": (200, [
+            {"tag_name": "v1.3.0", "html_url": "https://github.com/x/releases/tag/v1.3.0"},
+            {"tag_name": "v1.3.0-rc1", "prerelease": True},
+        ], {"Link": f'<{BASE}{repo}/releases?page=2>; rel="next"'}),
+        f"{repo}/releases?page=2": [
+            {"tag_name": "v1.3.0-rc0", "draft": True},
+            {"tag_name": "v1.2.0", "html_url": "https://github.com/x/releases/tag/v1.2.0"},
+        ],
         f"{repo}/compare/v1.3.0...main": {"ahead_by": 2},
         f"{repo}/issues": [{"number": 1}, {"number": 2, "pull_request": {"url": "u"}}],
         f"{repo}/actions/workflows": {"workflows": [
@@ -146,6 +155,7 @@ class GitHubSourceTests(unittest.TestCase):
         rel = repo.latest_release()
         self.assertEqual((rel.tag, rel.assets[0]["name"]), ("v1.3.0", "local_x-v1.3.0.zip"))
         self.assertEqual(repo.commits_since("v1.3.0"), 2)
+        self.assertEqual(repo.previous_release().tag, "v1.2.0")  # Pre-releases and drafts skipped, page 2 read.
         self.assertEqual((len(repo.open_issues()), len(repo.open_pull_requests())), (1, 1))
         wf = repo.workflows()[0]
         run = repo.latest_run(wf)

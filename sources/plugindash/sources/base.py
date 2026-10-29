@@ -60,6 +60,10 @@ class RepoView:
     def latest_release(self) -> Release | None:
         raise NotImplementedError
 
+    def previous_release(self) -> Release | None:
+        """The published release before the latest one, or None."""
+        raise NotImplementedError
+
     def commits_since(self, tag: str) -> int:
         """Commits on the default branch that are not in `tag`."""
         raise NotImplementedError

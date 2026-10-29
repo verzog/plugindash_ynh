@@ -12,9 +12,9 @@ Once a day it finds every repository you own that contains a Moodle `version.php
 |---|---|---|
 | CI status | CI failing on the default branch | Only the Moodle `main` cell failing; last run cancelled |
 | Silent CI | | No CI, workflow disabled by GitHub, no run for 30+ days |
-| Release matches version.php | Tag ≠ `$plugin->release` at that tag; version going backwards | No release yet |
+| Release matches version.php | Tag ≠ `$plugin->release` at that tag; version going backwards; a release that didn't raise `$plugin->version` | No release yet |
 | Release zip | No `.zip` on the latest release | Zip not named `<component>-<tag>.zip` |
-| Unreleased changes | | Commits on the default branch since the latest tag |
+| Unreleased changes | | Commits on the default branch since the latest tag, or `version.php` already bumped to a release that isn't published |
 | Issues | | Open issues or pull requests |
 | Moodle baseline | | `requires`/`supported` older than the lowest supported Moodle (5.1); `$plugin->release` with a leading `v` |
 | CI setup | A matrix cell runs PHP its Moodle branch can't install on (e.g. 8.2 on 5.2+) | Branches below the baseline or untested; no `main` cell allowed to fail; TZ not Australia/Sydney; warnings don't fail CI; grunt not limited to 5.1; `.travis.yml`; no `release.yml` |
