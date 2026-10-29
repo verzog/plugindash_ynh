@@ -28,10 +28,11 @@ def ci_workflows(repo, cfg: dict[str, Any]) -> list[Workflow]:
     return result
 
 
-def ci_text(repo, workflow: Workflow) -> tuple[str, list[str]]:
-    """The workflow's text plus the shared workflows it calls (with its inputs filled in), and the names of any
-    called workflow that couldn't be read. A plugin whose moodle-ci.yml only says `uses: .../moodle-plugin-ci.yml@v1`
-    then gets its matrix and steps checked where they really live."""
+def ci_text(repo, workflow: Workflow) -> tuple[str, list[str], list[str]]:
+    """The workflow's text plus the shared workflows it calls (with its inputs filled in), the names of any
+    called workflow that couldn't be read, and the shared workflows' texts on their own. A plugin whose
+    moodle-ci.yml only says `uses: .../moodle-plugin-ci.yml@v1` then gets its matrix and steps checked where
+    they really live."""
     text = repo.workflow_text(workflow) or ""
     parts, unreadable = [text], []
     for call in called_workflows(text):
@@ -45,7 +46,7 @@ def ci_text(repo, workflow: Workflow) -> tuple[str, list[str]]:
             unreadable.append(name)
         else:
             parts.append(fill_inputs(called, call["inputs"]))
-    return "\n".join(parts), unreadable
+    return "\n".join(parts), unreadable, parts[1:]
 
 
 def plural(count: int, word: str, plural_word: str | None = None) -> str:

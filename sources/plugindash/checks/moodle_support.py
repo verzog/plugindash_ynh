@@ -46,9 +46,16 @@ def run(repo, plugin, ctx):
     workflows = ci_workflows(repo, ctx.cfg)
     if workflows:
         read = [ci_text(repo, wf) for wf in workflows]
-        texts = [text for text, _ in read]
-        unreadable = any(missing for _, missing in read)  # Its matrix is in a shared workflow we can't see.
-        if not unreadable and not any(branch_name(latest) in text for text in texts):
+        texts = [text for text, _, _ in read]
+        unreadable = [name for _, missing, _ in read for name in missing]
+        if unreadable:
+            # The matrix is in a shared workflow we can't see. Incomplete, so alerts don't call earlier
+            # problems from this check fixed.
+            findings.append(Finding(
+                ID, INFO, f"Couldn't check the CI matrix: {', '.join(unreadable)} couldn't be read",
+                repo.file_url(workflows[0].path), incomplete=True,
+            ))
+        elif not any(branch_name(latest) in text for text in texts):
             wf = workflows[0]
             findings.append(Finding(
                 ID, AMBER, f"CI matrix doesn't test {branch_name(latest)}", repo.file_url(wf.path),

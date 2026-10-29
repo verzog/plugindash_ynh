@@ -431,7 +431,24 @@ class SharedWorkflowTests(unittest.TestCase):
         findings = run_check("ci_setup", repo)
         self.assertEqual(levels(findings), [INFO])
         self.assertIn("couldn't be read", findings[0].message)
-        self.assertNotIn(AMBER, levels(run_check("moodle_support", repo)))
+        self.assertTrue(findings[0].incomplete)  # So alerts don't call earlier CI problems fixed.
+        support = run_check("moodle_support", repo)
+        self.assertNotIn(AMBER, levels(support))
+        self.assertTrue(any(f.incomplete for f in support))
+
+    def test_inline_with_mapping(self):
+        grunt = run_check("ci_setup", shared_repo("    with: {grunt-branch: MOODLE_503_STABLE, behat: false}\n"))
+        self.assertIn("Grunt runs on every branch", grunt[0].message)
+
+    def test_tz_comes_from_the_shared_workflow_not_the_caller(self):
+        # A called workflow doesn't inherit the caller's env:, so only the shared workflow's TZ counts.
+        caller_env = "env:\n  TZ: Australia/Sydney\n"
+        repo = shared_repo(shared=SHARED_CI.replace("default: Australia/Sydney", "default: Australia/Brisbane"))
+        repo._files[".github/workflows/moodle-ci.yml"] = caller_env + caller_yaml()
+        self.assertIn("CI sets TZ Australia/Brisbane", run_check("ci_setup", repo)[0].message)
+        repo = shared_repo()
+        repo._files[".github/workflows/moodle-ci.yml"] = caller_env.replace("Sydney", "Brisbane") + caller_yaml()
+        self.assertEqual(levels(run_check("ci_setup", repo)), [OK])
 
     def test_shared_workflow_in_the_same_repo(self):
         repo = ci_repo("jobs:\n  ci:\n    uses: ./.github/workflows/shared.yml\n")

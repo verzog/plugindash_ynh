@@ -132,7 +132,10 @@ def called_workflows(text: str) -> list[dict[str, Any]]:
             end += 1
         job = lines[top:end]
         found = _key_line(job, "with", indent)
-        inputs = dict(_block(job, found)) if found is not None else {}
+        inputs: dict[str, str] = {}
+        if found is not None:
+            inline = re.match(r"^\s*with\s*:\s*\{(.*)\}\s*$", job[found])  # with: {behat: false}
+            inputs = _pairs(inline.group(1)) if inline else dict(_block(job, found))
         if remote:
             calls.append({"repo": remote.group(1), "path": remote.group(2), "ref": remote.group(3), "inputs": inputs})
         else:

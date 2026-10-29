@@ -46,10 +46,10 @@ def _plugin_ci(repo, cfg):
     """The first CI workflow that runs moodle-plugin-ci or has a Moodle branch matrix (directly, or in a shared
     workflow it calls), with the shared workflows' text added and any that couldn't be read."""
     for wf in ci_workflows(repo, cfg):
-        text, unreadable = ci_text(repo, wf)
+        text, unreadable, shared = ci_text(repo, wf)
         if "moodle-plugin-ci" in text or re.search(r"moodle[-_]branch", text, re.I):
-            return wf, text, unreadable
-    return None, "", []
+            return wf, text, unreadable, shared
+    return None, "", [], []
 
 
 def _matrix_findings(text, low, high, latest, url):
@@ -112,7 +112,7 @@ def _release_findings(repo, plugin, github, url):
 
 
 def run(repo, plugin, ctx):
-    wf, raw, unreadable = _plugin_ci(repo, ctx.cfg)
+    wf, raw, unreadable, shared = _plugin_ci(repo, ctx.cfg)
     if wf is None:
         return []  # No CI at all is the ci_activity check's job.
     text = strip_comments(raw)
@@ -124,14 +124,15 @@ def run(repo, plugin, ctx):
         # problems that aren't there.
         findings = [Finding(
             ID, INFO, f"CI uses {', '.join(unreadable)}, which couldn't be read, so the matrix and steps weren't "
-            "checked (a private repo needs the token to have Contents access to it)", url,
+            "checked (a private repo needs the token to have Contents access to it)", url, incomplete=True,
         )]
         findings += _release_findings(repo, plugin, github, url)
         return findings
     findings = []
     if github:  # GitLab's parallel: matrix uses a different layout; only the common rules apply there.
         findings += _matrix_findings(text, low, high, ctx.moodle_latest, url)
-    tz = re.search(r"\bTZ\s*:\s*['\"]?([\w/+-]+)", text)
+    # A shared workflow doesn't see the caller's env:, so when the tests run there, its TZ is the one that counts.
+    tz = re.search(r"\bTZ\s*:\s*['\"]?([\w/+-]+)", strip_comments("\n".join(shared)) if shared else text)
     if not tz:
         findings.append(Finding(ID, AMBER, "CI doesn't set TZ: Australia/Sydney (DST bugs only show in Sydney)", url))
     elif tz.group(1) != "Australia/Sydney":
