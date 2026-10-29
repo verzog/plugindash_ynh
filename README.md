@@ -28,6 +28,13 @@ Once a day it finds every repository you own that contains a Moodle `version.php
 | Security alerts | Critical/high Dependabot alerts | Medium/low alerts |
 | Plugins directory | | moodle.org listing older than your latest release |
 
+The page has four views:
+
+- **List**: every plugin, worst first, with its findings and what to do.
+- **To do**: problems grouped by check, so one fix can be applied across plugins.
+- **Releases**: version.php, latest tag, zip, unreleased work and the moodle.org listing side by side.
+- **Grid**: one dot per plugin per group of checks.
+
 Plus: alerts by ntfy, email or Matrix when a plugin gets a new problem, with what to do, plus a weekly reminder of everything still open; Prometheus metrics at `/metrics`; 30-day history per plugin; self-hosted GitLab support; your own checks as drop-in Python files.
 
 ## Install

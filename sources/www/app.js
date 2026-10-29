@@ -5,7 +5,21 @@
 
   var LABELS = {red: 'Needs fixing', amber: 'Needs attention', green: 'Healthy', grey: 'Not checked'};
   var ORDER = ['red', 'amber', 'green', 'grey'];
-  var state = {filter: 'all', query: '', status: null, history: {}};
+  var state = {filter: 'all', query: '', status: null, history: {}, view: 'list'};
+  var VIEWS = [['list', 'List'], ['todo', 'To do'], ['releases', 'Releases'], ['grid', 'Grid']];
+  var LEVEL_RANK = {ok: 0, info: 1, amber: 2, red: 3};
+  /* Columns of the Grid view: each groups related checks. */
+  var GRID_GROUPS = [
+    ['CI', ['ci_status', 'ci_activity', 'ci_setup']],
+    ['Release', ['release_match', 'release_zip', 'unreleased']],
+    ['Moodle', ['moodle_support', 'moodle_baseline']],
+    ['Licence', ['licence', 'licence_mode', 'repo_files']],
+    ['Strings & JS', ['lang_strings', 'amd_build']],
+    ['Directory', ['plugins_directory']],
+    ['Security', ['security_alerts']],
+    ['Issues', ['issues']],
+    ['Upkeep', ['dormant_actions']]
+  ];
 
   function el(tag, cls, text) {
     var node = document.createElement(tag);
@@ -196,12 +210,190 @@
     });
   }
 
+  function renderViews() {
+    var bar = document.getElementById('views');
+    bar.textContent = '';
+    VIEWS.forEach(function (v) {
+      var b = el('button', 'view', v[1]);
+      b.type = 'button';
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(state.view === v[0]));
+      b.addEventListener('click', function () {
+        state.view = v[0];
+        store('plugindash.view', v[0]);
+        renderViews();
+        renderList();
+      });
+      bar.appendChild(b);
+    });
+  }
+
+  function checkTitle(id) {
+    var found = (state.status.checks || []).filter(function (c) { return c.id === id; })[0];
+    return found ? found.title : id;
+  }
+
+  /* A plugin name that opens that plugin in the List view. */
+  function plugin(repo) {
+    var b = el('button', 'plugin-link', repo.component || repo.name);
+    b.type = 'button';
+    b.addEventListener('click', function () {
+      state.view = 'list';
+      store('plugindash.view', 'list');
+      renderViews();
+      openRow(repo.full_name);
+    });
+    return b;
+  }
+
+  function problems(repo) {
+    return repo.findings.filter(function (f) { return f.level === 'red' || f.level === 'amber'; });
+  }
+
+  /* To do: problems grouped by check, worst and most widespread first, with what to do. */
+  function renderTodo(board, shown) {
+    var groups = {};
+    shown.forEach(function (repo) {
+      problems(repo).forEach(function (f) { (groups[f.check] = groups[f.check] || []).push([repo, f]); });
+    });
+    var ids = Object.keys(groups).sort(function (a, b) {
+      var worst = function (id) { return Math.max.apply(null, groups[id].map(function (x) { return LEVEL_RANK[x[1].level]; })); };
+      return worst(b) - worst(a) || groups[b].length - groups[a].length || a.localeCompare(b);
+    });
+    if (!ids.length) { board.appendChild(el('p', 'board-note', 'Nothing to do: no problems in the plugins shown.')); }
+    ids.forEach(function (id) {
+      var items = groups[id];
+      var red = items.some(function (x) { return x[1].level === 'red'; });
+      var card = el('section', 'todo ' + (red ? 'red' : 'amber'));
+      var head = el('h2');
+      head.appendChild(el('span', 'pill ' + (red ? 'red' : 'amber'), red ? 'Needs fixing' : 'Needs attention'));
+      head.appendChild(el('span', null, checkTitle(id) + ' · ' + items.length + ' plugin' + (items.length === 1 ? '' : 's')));
+      card.appendChild(head);
+      var fixes = items.map(function (x) { return x[1].fix; }).filter(Boolean);
+      var shared = fixes.length === items.length && fixes.every(function (f) { return f === fixes[0]; });
+      if (shared) { card.appendChild(el('p', 'todo-fix', 'What to do: ' + fixes[0])); }
+      var ul = el('ul');
+      items.forEach(function (x) {
+        var li = el('li');
+        li.appendChild(plugin(x[0]));
+        var text = el('span', 'todo-msg');
+        text.appendChild(x[1].url ? link(x[1].message, x[1].url) : el('span', null, x[1].message));
+        if (!shared && x[1].fix) { text.appendChild(el('span', 'fix', 'What to do: ' + x[1].fix)); }
+        li.appendChild(text);
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+      board.appendChild(card);
+    });
+  }
+
+  function finding(repo, id) {
+    return repo.findings.filter(function (f) { return f.check === id; })[0];
+  }
+
+  /* One table cell: text, a level for its colour, and the finding's message as a tooltip. */
+  function cell(text, level, title) {
+    var td = el('td', level ? 'lv-' + level : null, text);
+    if (title) { td.title = title; }
+    return td;
+  }
+
+  /* Releases: where each plugin's release stands, from version.php to moodle.org. */
+  function renderReleases(board, shown) {
+    var table = el('table', 'grid-table');
+    var head = el('tr');
+    ['Plugin', 'version.php', 'Latest tag', 'Tag matches', 'Zip', 'Unreleased', 'moodle.org', 'Moodle'].forEach(function (h) {
+      head.appendChild(el('th', null, h));
+    });
+    table.appendChild(head);
+    shown.forEach(function (repo) {
+      var tr = el('tr');
+      var name = el('td');
+      name.appendChild(plugin(repo));
+      if (repo.mode) { name.appendChild(el('span', 'sub', repo.mode)); }
+      tr.appendChild(name);
+      tr.appendChild(cell(repo.release || '—'));
+      tr.appendChild(cell(repo.latest_tag || 'none', repo.latest_tag ? null : 'info'));
+      var m = finding(repo, 'release_match');
+      tr.appendChild(m && m.level !== 'info' ? cell(m.level === 'ok' ? '✓' : '✗ mismatch', m.level, m.message) : cell('—'));
+      var z = finding(repo, 'release_zip');
+      var zip = '—';
+      if (z) {
+        zip = z.level === 'ok' ? '✓ attached' : z.message.indexOf('not needed') !== -1 ? 'not needed' :
+          z.message.indexOf('no zip') !== -1 ? '✗ missing' : 'misnamed';
+      }
+      tr.appendChild(cell(zip, z ? z.level : null, z ? z.message : null));
+      var u = finding(repo, 'unreleased');
+      var unreleased = '—';
+      if (u) {
+        var bumped = /^version\.php says (\S+)/.exec(u.message);
+        var commits = /^(\d+ commits?)/.exec(u.message);
+        unreleased = u.level === 'ok' ? 'none' : bumped ? bumped[1] + ' not published' : commits ? commits[1] : u.message;
+      }
+      tr.appendChild(cell(unreleased, u ? u.level : null, u ? u.message : null));
+      var d = finding(repo, 'plugins_directory');
+      var listed = '—';
+      if (d) {
+        var behind = /^Directory has ([^;]+);/.exec(d.message);
+        var as = /^Listed as (.+)$/.exec(d.message);
+        listed = d.level === 'red' ? '✗ listed (in-house)' : /^Not in the public/.test(d.message) ? 'not listed (in-house)' :
+          behind ? 'behind (' + behind[1] + ')' : /^Directory is up to date/.test(d.message) ? '✓ up to date' :
+          /^Not listed/.test(d.message) ? 'not listed' : as ? 'listed (' + as[1] + ')' : 'unknown';
+      }
+      tr.appendChild(cell(listed, d ? d.level : null, d ? d.message : null));
+      tr.appendChild(cell(repo.supported ? repo.supported[0] + '–' + repo.supported[1] : '—'));
+      table.appendChild(tr);
+    });
+    var wrap = el('div', 'table-wrap');
+    wrap.appendChild(table);
+    board.appendChild(wrap);
+  }
+
+  /* Grid: every plugin against each group of checks, as one coloured dot per group. */
+  function renderGrid(board, shown) {
+    var table = el('table', 'grid-table grid-dots');
+    var head = el('tr');
+    head.appendChild(el('th', null, 'Plugin'));
+    GRID_GROUPS.forEach(function (g) { head.appendChild(el('th', 'c', g[0])); });
+    table.appendChild(head);
+    shown.forEach(function (repo) {
+      var tr = el('tr');
+      var name = el('td');
+      name.appendChild(plugin(repo));
+      name.appendChild(el('span', 'sub', (repo.mode ? repo.mode + ' · ' : '') + (repo.latest_tag || 'no release')));
+      tr.appendChild(name);
+      GRID_GROUPS.forEach(function (g) {
+        var found = repo.findings.filter(function (f) { return g[1].indexOf(f.check) !== -1; });
+        var td = el('td', 'c');
+        var worst = found.reduce(function (a, f) { return LEVEL_RANK[f.level] > LEVEL_RANK[a] ? f.level : a; }, 'ok');
+        var dot = el('span', 'dot ' + (!found.length ? 'none' : worst === 'red' || worst === 'amber' ? worst : 'green'));
+        dot.title = found.length ? found.map(function (f) { return f.message; }).join('\n') : 'Not checked';
+        dot.setAttribute('aria-label', g[0] + ': ' + (!found.length ? 'not checked' : worst));
+        td.appendChild(dot);
+        tr.appendChild(td);
+      });
+      table.appendChild(tr);
+    });
+    var wrap = el('div', 'table-wrap');
+    wrap.appendChild(table);
+    board.appendChild(wrap);
+  }
+
   function renderList() {
     var list = document.getElementById('list');
+    var board = document.getElementById('board');
     var empty = document.getElementById('empty');
     list.textContent = '';
+    board.textContent = '';
     var shown = state.status.repos.filter(matches);
-    shown.forEach(function (repo) { list.appendChild(buildRow(repo)); });
+    list.hidden = state.view !== 'list';
+    board.hidden = state.view === 'list';
+    if (state.view === 'list') {
+      shown.forEach(function (repo) { list.appendChild(buildRow(repo)); });
+    } else if (shown.length) {
+      var live = shown.filter(function (r) { return !r.archived; });
+      ({todo: renderTodo, releases: renderReleases, grid: renderGrid})[state.view](board, live);
+    }
     if (!state.status.repos.length) {
       empty.hidden = false;
       empty.textContent = 'No Moodle plugins found yet. Add a GitHub token in the YunoHost config panel, ' +
@@ -306,6 +498,7 @@
   }
 
   function render() {
+    renderViews();
     renderHeader();
     renderSegments();
     renderList();
@@ -386,6 +579,8 @@
 
   function start() {
     state.filter = store('plugindash.filter') || 'all';
+    var saved = store('plugindash.view');
+    state.view = VIEWS.some(function (v) { return v[0] === saved; }) ? saved : 'list';
     document.getElementById('search').addEventListener('input', function (e) {
       state.query = e.target.value.trim();
       renderList();
