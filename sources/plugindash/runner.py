@@ -8,7 +8,7 @@ import logging
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -338,6 +338,8 @@ def _run(cfg: dict[str, Any], send_alerts: bool = True, sources=None, directory=
                 remember = False
         if remember:
             history.set_alert_problems(alerts.next_baseline(previous or {}, status["repos"]))
+        if send_alerts:
+            _weekly_reminder(cfg, history, status)
         changes = found
         log.info(
             "Done: %d repos (%s) in %ss, %d API calls; %d alert-worthy changes",
@@ -347,6 +349,25 @@ def _run(cfg: dict[str, Any], send_alerts: bool = True, sources=None, directory=
         return status
     finally:
         history.close()
+
+
+def _weekly_reminder(cfg: dict[str, Any], history: History, status: dict[str, Any]) -> None:
+    """Send the weekly list of open problems when it's due (see alerts.reminder_due)."""
+    today = datetime.now(_zone(cfg)).date()
+    last_text = history.get_meta("reminder_last")
+    last = date.fromisoformat(last_text) if last_text else None
+    if not alerts.reminder_due(today, last, cfg["reminder_day"]):
+        return
+    message = alerts.reminder_text(status["repos"], cfg.get("public_url") or None)
+    if message is None:
+        history.set_meta("reminder_last", today.isoformat())  # Nothing open: nothing to remind about.
+        return
+    results = send_all(cfg, *message, cfg.get("public_url") or None)
+    status["reminder"] = results
+    if not results or "sent" in results.values():
+        history.set_meta("reminder_last", today.isoformat())
+    else:
+        log.warning("No channel delivered the weekly reminder; it will be tried again on the next run")
 
 
 def _load(path: str) -> dict[str, Any] | None:

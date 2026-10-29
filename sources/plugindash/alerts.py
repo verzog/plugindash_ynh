@@ -10,6 +10,7 @@ error, a missing token permission) keeps its earlier problems: they are neither 
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Any
 
 # Plain words for each colour, used instead of "red"/"amber" in alerts.
@@ -136,7 +137,7 @@ def _size(text: str) -> int:
     return len(text.encode("utf-8"))
 
 
-def _fit(blocks: list[str], fixed_lines: list[str], public_url: str | None) -> str:
+def _fit(blocks: list[str], fixed_lines: list[str], public_url: str | None, rest: str = "with new problems") -> str:
     """The body, kept under MAX_BYTES: whole plugins first, then fixes, then a pointer to the rest."""
     where = f": {public_url}" if public_url else "."
     reserve = 200 + _size(where)  # Room for the "…and N more" lines.
@@ -153,7 +154,7 @@ def _fit(blocks: list[str], fixed_lines: list[str], public_url: str | None) -> s
         used += _size(block) + 1
     if len(parts) < len(blocks):
         more = len(blocks) - len(parts)
-        parts.append(f"…and {_plural(more, 'more plugin')} with new problems{where}\n")
+        parts.append(f"…and {_plural(more, 'more plugin')} {rest}{where}\n")
         used += _size(parts[-1]) + 1
     if fixed_lines:
         lines = ["Fixed since the last check:"]
@@ -172,3 +173,37 @@ def _fit(blocks: list[str], fixed_lines: list[str], public_url: str | None) -> s
 
 def _priority(with_new: list[dict[str, Any]]) -> str:
     return "high" if any(p["level"] == "red" for c in with_new for p in c["new"]) else "default"
+
+
+WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+def reminder_due(today: date, last: date | None, day: str) -> bool:
+    """On the chosen weekday, once; or the next run after a missed one (a week since the last)."""
+    if day not in WEEKDAYS:
+        return False
+    if last == today:
+        return False
+    if today.weekday() == WEEKDAYS.index(day):
+        return True
+    return last is not None and (today - last).days >= 7
+
+
+def reminder_text(repos: list[dict[str, Any]], public_url: str | None = None) -> tuple[str, str, str] | None:
+    """(title, body, priority) listing everything still needing work, or None if all is well."""
+    open_repos = [r for r in repos if r["status"] in ("red", "amber") and problems_of(r)]
+    if not open_repos:
+        return None
+    open_repos.sort(key=lambda r: (r["status"] != "red", (r.get("component") or r["name"]).lower()))
+    count = sum(len(problems_of(r)) for r in open_repos)
+    title = (f"Plugin dashboard: weekly reminder, {_plural(count, 'open problem')} in "
+             f"{_plural(len(open_repos), 'plugin')}")
+    blocks = []
+    for repo in open_repos:
+        block = [f"{repo.get('component') or repo['name']}: {STATUS_WORDS[repo['status']]}"]
+        for problem in sorted(problems_of(repo).values(), key=lambda p: -LEVEL_RANK[p["level"]]):
+            block.append(f"  ✗ {problem['message']}")
+            if problem.get("fix"):
+                block.append(f"    What to do: {problem['fix']}")
+        blocks.append("\n".join(block) + "\n")
+    return title, _fit(blocks, [], public_url, "still needing work"), "default"
