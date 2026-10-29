@@ -13,6 +13,12 @@ DESCRIPTION = ("Amber when the default branch has commits that aren't in the lat
                "already names a newer release that hasn't been published (info for SCCA plugins).")
 ORDER = 22
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "publish v": "Publish it: create a GitHub release with that tag (the zip builds itself).",
+    "not yet released": "When it's ready, bump version.php and publish a release.",
+}
+
 
 def run(repo, plugin, ctx):
     rel = repo.latest_release()

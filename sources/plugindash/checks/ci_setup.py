@@ -18,6 +18,20 @@ DESCRIPTION = ("Amber if the CI workflow strays from the conventions (branch-awa
                "matrix cell runs a PHP version that Moodle branch can't install on.")
 ORDER = 12
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "below the": "Remove that branch's cells from the CI matrix.",
+    "matrix doesn't test": "Add a cell for that branch to the CI matrix.",
+    "No Moodle main cell": "Add {moodle-branch: 'main', php: '8.4', database: 'pgsql'} to the CI matrix.",
+    "isn't allowed to fail": "Add continue-on-error: ${{ matrix.moodle-branch == 'main' }} to the test job.",
+    "won't install": "Use PHP 8.3 or later for Moodle 5.2+ cells (PHP 8.2 only on 5.1).",
+    "TZ": "Set TZ: Australia/Sydney in the CI config (under env: on GitHub, variables: on GitLab).",
+    "Warnings don't fail": "Add the listed flags to those moodle-plugin-ci steps.",
+    "Grunt runs": "Add an if: so the Grunt step only runs on the lowest supported branch.",
+    ".travis.yml": "Delete .travis.yml.",
+    "No release workflow": "Add .github/workflows/release.yml (the 'Release zip' workflow).",
+}
+
 # moodle-plugin-ci commands and the flag that makes warnings fail CI.
 STRICT_FLAGS = (
     ("phpcs", "--max-warnings 0"),

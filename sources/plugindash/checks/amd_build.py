@@ -9,6 +9,12 @@ TITLE = "AMD builds"
 DESCRIPTION = "Amber if a module in amd/src has no amd/build/<name>.min.js or .min.js.map; rebuild with grunt."
 ORDER = 53
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "": ("Rebuild with grunt in a checkout of the lowest supported Moodle branch (npx grunt amd --root=<plugin "
+         "dir>) and commit amd/src and amd/build together."),
+}
+
 
 def run(repo, plugin, ctx):
     sources = repo.list_dir("amd/src")

@@ -11,6 +11,15 @@ TITLE = "Licence consistency"
 DESCRIPTION = "Red if the @license tag and the LICENSE file disagree; amber if the README disagrees or files are missing."
 ORDER = 50
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "no @license tag": "Add the @license line for the plugin's licence mode to version.php's docblock.",
+    "No LICENSE file": "Add a LICENSE file with the full text of the declared licence.",
+    "but @license says": "Make the file match the @license tag (or correct the tag).",
+    "No README": "Add a README with a Licence section.",
+    "no licence section": "Add a Licence section to the README naming the licence.",
+}
+
 LICENCE_FILES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING", "LICENCE", "LICENCE.md")
 
 LABELS = {

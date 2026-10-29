@@ -13,7 +13,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from . import __version__
-from .checks import Context, load_checks
+from .checks import Context, fix_for, load_checks
 from .history import History
 from .http import AuthError, HttpError, NotFound
 from .model import AMBER, INFO, LEVEL_RANK, LEVELS, OK, RED, STATUS_RANK, Finding, worst_status
@@ -74,20 +74,22 @@ def check_repo(repo, checks, ctx: Context) -> dict[str, Any] | None:
                 for finding in results:
                     if not isinstance(finding, Finding) or finding.level not in LEVELS:
                         raise ValueError(f"returned an invalid finding: {finding!r}")
+                    if finding.fix is None and finding.level in (RED, AMBER):
+                        finding.fix = fix_for(check, finding.message)
                 findings.extend(results)
             # Amber, not info, and not changed by severity overrides: a check that couldn't run
             # must not let the repo look healthy.
             except AuthError as err:
                 findings.append(Finding(
                     check.ID, AMBER, f"{check.TITLE}: couldn't run, the token lacks permission (HTTP {err.status})",
-                    overridable=False,
+                    overridable=False, fix=TOKEN_FIX.get(repo.source),
                 ))
             except NotFound:
                 # GitHub answers 404 rather than 403 when a fine-grained token lacks a permission
                 # on a private repo. Sources already turn the expected 404s (no file, no release) into None.
                 findings.append(Finding(
                     check.ID, AMBER, f"{check.TITLE}: couldn't run, the server returned 404 "
-                    "(usually a missing token permission)", overridable=False,
+                    "(usually a missing token permission)", overridable=False, fix=TOKEN_FIX.get(repo.source),
                 ))
             except HttpError as err:
                 findings.append(Finding(check.ID, INFO, f"{check.TITLE}: couldn't fetch data ({err})"))
@@ -134,6 +136,13 @@ def check_repo(repo, checks, ctx: Context) -> dict[str, Any] | None:
         "findings": [f.to_dict() for f in findings],
     }
 
+
+# What to do when a check couldn't run because of the token.
+TOKEN_FIX = {
+    "github": "Give the token read access to Metadata, Contents, Issues, Pull requests, Actions and Dependabot alerts "
+              "(GitHub, Settings, Developer settings, Fine-grained tokens).",
+    "gitlab": "Give the token the read_api scope and access to this project.",
+}
 
 # What to grant when a token can list a repo but not read its files.
 ACCESS_HINTS = {

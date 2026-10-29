@@ -14,6 +14,18 @@ DESCRIPTION = ("Red if an in-house SCCA plugin doesn't exclude phpcs's GPL boile
                "missing eol=lf or export-ignore lines, or there's no Privacy API provider.")
 ORDER = 51
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "an SCCA plugin uses": "Change @copyright to '© Skin Cancer College Australasia' in every file.",
+    "a GPL plugin uses": "Change @copyright to the right holder in every file.",
+    "phpcs will fail": "Commit a .phpcs.xml that excludes moodle.Files.BoilerplateComment.",
+    "should keep": "Remove the exclusion from the phpcs config.",
+    "No .gitattributes": ("Add .gitattributes with * text=auto eol=lf and export-ignore for /.github, /tests, "
+                          "/.gitattributes and /.gitignore."),
+    ".gitattributes is missing": "Add the listed lines to .gitattributes.",
+    "Privacy API": "Add classes/privacy/provider.php (a null_provider if it stores no personal data).",
+}
+
 BOILERPLATE_SNIFF = "moodle.Files.BoilerplateComment"
 # Every file name phpcs picks up by itself.
 PHPCS_FILES = (".phpcs.xml", "phpcs.xml", ".phpcs.xml.dist", "phpcs.xml.dist")

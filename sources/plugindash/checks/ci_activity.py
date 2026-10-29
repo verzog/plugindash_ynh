@@ -10,12 +10,22 @@ TITLE = "Silent CI"
 DESCRIPTION = "Amber if there's no CI, GitHub has disabled a workflow, or CI hasn't run within the stale-days limit."
 ORDER = 11
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "GitHub disabled": "In Actions, open the workflow and choose Enable workflow, then push a commit to run it.",
+    "never finished": "Check Actions for runs that are stuck queued or fail before they start.",
+    "Last CI run": "Re-run the workflow (or push a small change) to confirm CI still passes.",
+}
+
 
 def run(repo, plugin, ctx):
     workflows = ci_workflows(repo, ctx.cfg)
     actions_url = f"{repo.html_url}/actions" if repo.source == "github" else f"{repo.html_url}/-/pipelines"
     if not workflows:
-        return [Finding(ID, AMBER, "No CI workflow found", actions_url)]
+        # The fix depends on where the repo lives, so it's set here rather than in FIX.
+        fix = (".github/workflows/moodle-ci.yml, based on moodle-plugin-ci's gha.dist.yml" if repo.source == "github"
+               else ".gitlab-ci.yml running moodle-plugin-ci")
+        return [Finding(ID, AMBER, "No CI workflow found", actions_url, fix=f"Add {fix}.")]
     findings = []
     newest = None
     for wf in workflows:

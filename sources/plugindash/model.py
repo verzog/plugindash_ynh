@@ -30,9 +30,10 @@ class Finding:
     message: str
     url: str | None = None
     overridable: bool = True  # False keeps severity overrides from changing the level.
+    fix: str | None = None    # What to do about it, shown on the page and in alerts.
 
     def to_dict(self) -> dict[str, Any]:
-        return {"check": self.check, "level": self.level, "message": self.message, "url": self.url}
+        return {"check": self.check, "level": self.level, "message": self.message, "url": self.url, "fix": self.fix}
 
 
 @dataclass

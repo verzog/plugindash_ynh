@@ -17,7 +17,7 @@ from fakes import (  # noqa: E402
     healthy_repo, lang_file_text, ok_run, release, sample_directory, sample_repos, version_php,
 )
 from plugindash import config as config_mod  # noqa: E402
-from plugindash.checks import Context, load_checks  # noqa: E402
+from plugindash.checks import Context, fix_for, load_checks  # noqa: E402
 from plugindash.model import AMBER, INFO, OK, RED, Job, SecurityAlert, Workflow  # noqa: E402
 from plugindash.checks._ci import matrix_cells  # noqa: E402
 from plugindash.checks.lang_strings import lang_file  # noqa: E402
@@ -518,6 +518,55 @@ class ReleaseVersionTests(unittest.TestCase):
         repo._tag_files["v1.3.0"]["version.php"] = version_php("local_x", "1.2.9")
         repo.previous_release = unavailable
         self.assertEqual(levels(run_check("release_match", repo)), [INFO, RED])
+
+
+class FixHintTests(unittest.TestCase):
+    def test_fix_table_lookup(self):
+        zip_fix = fix_for(CHECKS["release_zip"], "Release v1.2.0 has no zip attached")
+        self.assertIn("Re-run the release workflow", zip_fix)
+        self.assertIn("Triage", fix_for(CHECKS["issues"], "3 open issues"))  # The "" default.
+        self.assertIsNone(fix_for(CHECKS["ci_setup"], "Something no table mentions"))
+
+    def test_every_fix_key_appears_in_its_check(self):
+        import inspect
+        for check in CHECKS.values():
+            source = inspect.getsource(check).split("\nFIX = {", 1)[0] + inspect.getsource(check).split("\n}\n", 1)[-1]
+            for key in getattr(check, "FIX", {}):
+                self.assertIn(key, source, f"{check.ID}: FIX key {key!r} matches no message")
+
+    def test_every_sample_problem_gets_a_fix(self):
+        cfg = config_mod.normalise({"github_token": "x"})
+        status = collect(cfg, sources=[FakeSource(sample_repos())], directory=sample_directory(), now=NOW)
+        problems = [(r["full_name"], f) for r in status["repos"] for f in r["findings"]
+                    if f["level"] in ("red", "amber")]
+        self.assertTrue(problems)
+        for name, finding in problems:
+            self.assertTrue(finding["fix"], f"{name}: no fix for {finding['check']}: {finding['message']}")
+        quiet = [f for r in status["repos"] for f in r["findings"] if f["level"] in ("ok", "info")]
+        self.assertTrue(all(f["fix"] is None for f in quiet))
+
+    def test_advice_follows_the_repo(self):
+        gitlab = healthy_repo("v/r", "local_x", source="gitlab", workflows=[])
+        self.assertIn(".gitlab-ci.yml", run_check("ci_activity", gitlab)[0].fix)
+        github = healthy_repo("v/r", "local_x", workflows=[])
+        self.assertIn(".github/workflows/moodle-ci.yml", run_check("ci_activity", github)[0].fix)
+        module = healthy_repo("v/r", "mod_board")
+        del module._files["lang/en/board.php"]
+        self.assertEqual(run_check("lang_strings", module)[0].fix,
+                         "Add lang/en/board.php with at least $string['pluginname'].")
+
+    def test_token_problems_say_which_permissions(self):
+        def no_actions():
+            from plugindash.http import AuthError
+            raise AuthError(403, "https://api.github.com/repos/v/r/actions/workflows", "")
+
+        repo = healthy_repo("verzog/moodle-local_x", "local_x")
+        repo.workflows = no_actions
+        status = collect(config_mod.normalise({"github_token": "x"}), sources=[FakeSource([repo])],
+                         directory=FakeDirectory(), now=NOW)
+        blocked = [f for f in status["repos"][0]["findings"] if "couldn't run" in f["message"]]
+        self.assertTrue(blocked)
+        self.assertIn("Fine-grained tokens", blocked[0]["fix"])
 
 
 class RunnerTests(unittest.TestCase):

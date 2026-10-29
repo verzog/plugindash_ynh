@@ -10,6 +10,11 @@ TITLE = "Open issues and pull requests"
 DESCRIPTION = "Amber while any issue or pull request is open."
 ORDER = 30
 
+# What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
+FIX = {
+    "": "Triage them: reply, fix, merge or close.",
+}
+
 
 def run(repo, plugin, ctx):
     findings = []

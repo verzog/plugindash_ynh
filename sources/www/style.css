@@ -231,6 +231,12 @@ h1 { font-size: 1.75rem; line-height: 1.2; margin: 0; letter-spacing: -0.01em; }
 .findings li.ok a, .findings li.info a { text-decoration: none; }
 .findings li.ok a:hover, .findings li.info a:hover { text-decoration: underline; }
 .findings .check { color: var(--muted); font-size: 0.8125rem; margin-left: 8px; }
+.findings .fix {
+  display: block;
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin-top: 2px;
+}
 .links { margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.9375rem; }
 
 .empty { color: var(--muted); padding: 32px 0; }

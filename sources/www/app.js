@@ -165,6 +165,7 @@
       var text = el('span');
       text.appendChild(f.url ? link(f.message, f.url) : el('span', null, f.message));
       text.appendChild(el('span', 'check', f.check));
+      if (f.fix) { text.appendChild(el('span', 'fix', 'What to do: ' + f.fix)); }
       li.appendChild(text);
       list.appendChild(li);
     });
