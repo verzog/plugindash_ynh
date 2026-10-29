@@ -31,9 +31,13 @@ class Finding:
     url: str | None = None
     overridable: bool = True  # False keeps severity overrides from changing the level.
     fix: str | None = None    # What to do about it, shown on the page and in alerts.
+    incomplete: bool = False  # The check didn't finish, so its earlier problems can't be called fixed.
 
     def to_dict(self) -> dict[str, Any]:
-        return {"check": self.check, "level": self.level, "message": self.message, "url": self.url, "fix": self.fix}
+        result = {"check": self.check, "level": self.level, "message": self.message, "url": self.url, "fix": self.fix}
+        if self.incomplete:
+            result["incomplete"] = True
+        return result
 
 
 @dataclass

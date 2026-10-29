@@ -568,6 +568,7 @@ class FixHintTests(unittest.TestCase):
         blocked = [f for f in status["repos"][0]["findings"] if "couldn't run" in f["message"]]
         self.assertTrue(blocked)
         self.assertIn("Fine-grained tokens", blocked[0]["fix"])
+        self.assertTrue(all(f["incomplete"] for f in blocked))
 
 
 def alert_repo(name, status, problems):
@@ -612,11 +613,33 @@ class AlertTests(unittest.TestCase):
         self.assertEqual(alerts.changes(self.before, unreadable), [])
         self.assertEqual(alerts.next_baseline(self.before, unreadable)["v/b"], self.before["v/b"])
 
+    def test_singular_and_plural_counts_are_the_same_problem(self):
+        fewer = [alert_repo("a", "amber", [("issues", "amber", "1 open issue")])]
+        self.assertEqual(alerts.changes(self.before, fewer), [])
+
+    def test_unfinished_checks_keep_their_problems(self):
+        before = alerts.next_baseline({}, [alert_repo("b", "red", [("ci_status", "red", "CI is failing"),
+                                                                   ("release_zip", "red", "No zip")])])
+        now = alert_repo("b", "red", [("ci_status", "red", "CI is failing")])
+        now["findings"].append({"check": "release_zip", "level": "info", "incomplete": True,
+                                "message": "Release zip: couldn't fetch data (HTTP 502)"})
+        self.assertEqual(alerts.changes(before, [now]), [])
+        after = alerts.next_baseline(before, [now])
+        self.assertEqual(after, before)
+        back = [alert_repo("b", "red", [("ci_status", "red", "CI is failing"), ("release_zip", "red", "No zip")])]
+        self.assertEqual(alerts.changes(after, back), [])
+
     def test_long_alerts_are_cut_short(self):
-        many = [alert_repo(f"p{i}", "amber", [("issues", "amber", "1 open issue")]) for i in range(13)]
+        problems = [("release_zip", "red", "No zip attached to v1.2.3 " + "x" * 200),
+                    ("release_match", "red", "Tag v1.2.3 doesn't match version.php " + "y" * 200)]
+        many = [alert_repo(f"p{i}", "red", problems) for i in range(10)]
         title, body, _ = alerts.alert_text(alerts.changes({}, many), "https://dash.example/plugins")
-        self.assertIn("13 new problems in 13 plugins", title)
-        self.assertIn("…and 3 more plugins with new problems: https://dash.example/plugins", body)
+        self.assertIn("20 new problems in 10 plugins", title)
+        self.assertLessEqual(len(body.encode("utf-8")), 4096)
+        self.assertRegex(body, r"…and \d+ more plugins? with new problems: https://dash.example/plugins")
+        huge = [alert_repo("p", "red", [("ci_status", "red", "é" * 5000)])]
+        _, body, _ = alerts.alert_text(alerts.changes({}, huge))
+        self.assertLessEqual(len(body.encode("utf-8")), 4096)
 
 
 class RunnerTests(unittest.TestCase):

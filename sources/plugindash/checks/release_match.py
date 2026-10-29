@@ -56,7 +56,8 @@ def run(repo, plugin, ctx):
         before = version_at(repo, previous.tag) if previous else None
     except HttpError as err:
         # Keep the findings above: a failed look-back mustn't hide a mismatch already found.
-        findings.append(Finding(ID, INFO, f"Couldn't compare with the previous release ({err})"))
+        findings.append(Finding(ID, INFO, f"Couldn't compare with the previous release ({err})",
+                                incomplete=True))
         return findings
     before_version = before.get("version") if before else None
     if isinstance(tag_version, int) and isinstance(before_version, int) and tag_version <= before_version:

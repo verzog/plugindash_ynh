@@ -54,10 +54,12 @@ red, amber, green or grey on a single page. It is for his own use only: one admi
   key found in the message wins, `""` is the default; the runner fills it in (`checks.fix_for`). A test fails
   if a key matches nothing in its check, or a sample problem has no fix.
 - Alerts are about problems (red/amber findings), not colours (`alerts.py`). Each is remembered in
-  `alert_problems` under its check + message with standalone counts blanked, so "31 days" → "32 days" isn't
-  news but a new tag is; amber rising to red counts as new. "worse" (default) alerts when anything is new and
-  adds a "Fixed since the last check" list; "any" also alerts on fixes alone. Grey repos are skipped and keep
-  their old problems. The first run, and the first after upgrading, only remembers (`meta`
+  `alert_problems` under its check + message with standalone counts (and their plural "s") blanked, so
+  "31 days" → "32 days" or "2 issues" → "1 issue" isn't news but a new tag is; amber rising to red counts as
+  new. "worse" (default) alerts when anything is new and adds a "Fixed since the last check" list; "any" also
+  alerts on fixes alone. Grey repos are skipped and keep their old problems; so do checks that didn't finish
+  (findings with `incomplete`: fetch errors, token blocks, check errors). Bodies stay under ntfy's 4 KB
+  (`MAX_BYTES`, UTF-8). The first run, and the first after upgrading, only remembers (`meta`
   `alert_problems_saved`). If every channel fails nothing is remembered, so the alert is resent next run.
 - The config panel's `tags` widget splits on spaces. Settings that can hold multi-word values (e.g.
   `ci_ignore_workflows`) must be plain `string` fields, comma-separated.

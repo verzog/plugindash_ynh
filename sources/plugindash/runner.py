@@ -82,7 +82,7 @@ def check_repo(repo, checks, ctx: Context) -> dict[str, Any] | None:
             except AuthError as err:
                 findings.append(Finding(
                     check.ID, AMBER, f"{check.TITLE}: couldn't run, the token lacks permission (HTTP {err.status})",
-                    overridable=False, fix=TOKEN_FIX.get(repo.source),
+                    overridable=False, fix=TOKEN_FIX.get(repo.source), incomplete=True,
                 ))
             except NotFound:
                 # GitHub answers 404 rather than 403 when a fine-grained token lacks a permission
@@ -90,12 +90,13 @@ def check_repo(repo, checks, ctx: Context) -> dict[str, Any] | None:
                 findings.append(Finding(
                     check.ID, AMBER, f"{check.TITLE}: couldn't run, the server returned 404 "
                     "(usually a missing token permission)", overridable=False, fix=TOKEN_FIX.get(repo.source),
+                    incomplete=True,
                 ))
             except HttpError as err:
-                findings.append(Finding(check.ID, INFO, f"{check.TITLE}: couldn't fetch data ({err})"))
+                findings.append(Finding(check.ID, INFO, f"{check.TITLE}: couldn't fetch data ({err})", incomplete=True))
             except Exception as err:  # A buggy check must not stop the others.
                 log.exception("Check %s failed on %s", check.ID, repo.full_name)
-                findings.append(Finding(check.ID, INFO, f"{check.TITLE}: check error ({err})"))
+                findings.append(Finding(check.ID, INFO, f"{check.TITLE}: check error ({err})", incomplete=True))
     apply_overrides(findings, ctx.cfg["severity_overrides"])
     findings.sort(key=lambda f: (-LEVEL_RANK[f.level], getattr(f, "check", "")))
     rel = None
