@@ -49,6 +49,11 @@ class RepoView:
         """File names directly inside `path` on the default branch, or None when it doesn't exist."""
         raise NotImplementedError
 
+    def shared_workflow(self, repo: str, path: str, ref: str) -> str | None:
+        """A shared (reusable) workflow in another repo, e.g. ('verzog/moodle-ci-workflows',
+        '.github/workflows/moodle-plugin-ci.yml', 'v1'). None when it can't be read or the source has none."""
+        return None
+
     def readme(self) -> str | None:
         for name in ("README.md", "README.txt", "README", "readme.md"):
             text = self.file(name)

@@ -105,6 +105,9 @@ class FakeRepo(RepoView):
     def file_url(self, path, ref=None):
         return f"{self.html_url}/blob/{ref or self.default_branch}/{path}"
 
+    def shared_workflow(self, repo, path, ref):
+        return getattr(self, "_shared", {}).get((repo, path, ref))
+
     def latest_release(self):
         return self._release
 

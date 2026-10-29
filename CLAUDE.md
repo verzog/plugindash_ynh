@@ -108,6 +108,11 @@ parsed to 501 / 503. Workflows are read with plain text matching (`checks/_ci.py
 flow or block `include:` matrices and cross-product matrices (with `exclude:`, the PHP rule is skipped).
 `moodle.py` holds the facts: `BRANCH_VERSIONS` (only certain values) and `min_php()` (5.2 dropped 8.2).
 GitLab repos only get the TZ and warning-flag rules.
+A plugin's workflow may only call a shared workflow (`uses: verzog/moodle-ci-workflows/.github/workflows/
+moodle-plugin-ci.yml@v1`, or `./.github/workflows/x.yml`). `_util.ci_text()` then reads that file too
+(`RepoView.shared_workflow()`, one level, names validated) and `_ci.fill_inputs()` writes the caller's `with:`
+values, or the input defaults, in place of `inputs.*`. If it can't be read, `ci_setup` gives an info note and
+skips the workflow rules rather than reporting problems it can't see.
 
 `repo_files` checks the boilerplate sniff against the mode (SCCA must exclude it, red; GPL must keep it,
 amber), the `@copyright` holder (skipped for forks), `.gitattributes` and `classes/privacy/provider.php`.
