@@ -15,7 +15,6 @@ ORDER = 52
 
 # What to do about each kind of problem: the first key found in the finding's message wins; "" is the default.
 FIX = {
-    "No language file": "Add lang/en/<component>.php with at least $string['pluginname'].",
     "Repeated": "Delete the duplicate lines.",
     "LC_ALL=C order": "Sort the $string lines in LC_ALL=C order.",
     "US spelling": "Use the Australian spelling shown in brackets.",
@@ -99,7 +98,8 @@ def run(repo, plugin, ctx):
     path = lang_file(component)
     text = repo.file(path)
     if text is None:
-        return [Finding(ID, AMBER, f"No language file ({path})", repo.html_url)]
+        return [Finding(ID, AMBER, f"No language file ({path})", repo.html_url,
+                        fix=f"Add {path} with at least $string['pluginname'].")]
     url = repo.file_url(path)
     found = entries(text)
     keys = [key for key, _ in found]

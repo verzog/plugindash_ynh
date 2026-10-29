@@ -545,6 +545,16 @@ class FixHintTests(unittest.TestCase):
         quiet = [f for r in status["repos"] for f in r["findings"] if f["level"] in ("ok", "info")]
         self.assertTrue(all(f["fix"] is None for f in quiet))
 
+    def test_advice_follows_the_repo(self):
+        gitlab = healthy_repo("v/r", "local_x", source="gitlab", workflows=[])
+        self.assertIn(".gitlab-ci.yml", run_check("ci_activity", gitlab)[0].fix)
+        github = healthy_repo("v/r", "local_x", workflows=[])
+        self.assertIn(".github/workflows/moodle-ci.yml", run_check("ci_activity", github)[0].fix)
+        module = healthy_repo("v/r", "mod_board")
+        del module._files["lang/en/board.php"]
+        self.assertEqual(run_check("lang_strings", module)[0].fix,
+                         "Add lang/en/board.php with at least $string['pluginname'].")
+
     def test_token_problems_say_which_permissions(self):
         def no_actions():
             from plugindash.http import AuthError
