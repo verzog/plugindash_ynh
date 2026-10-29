@@ -349,6 +349,101 @@ class CiSetupTests(unittest.TestCase):
         self.assertEqual(config_mod.normalise({"moodle_max_branch": "nonsense"})["moodle_max_branch"], 503)
 
 
+# A trimmed copy of verzog/moodle-ci-workflows' moodle-plugin-ci.yml: inputs with defaults, then the job.
+SHARED_CI = """name: Moodle Plugin CI
+on:
+  workflow_call:
+    inputs:
+      matrix:
+        description: JSON list of cells.
+        type: string
+        default: >-
+          [
+            {"moodle-branch": "MOODLE_501_STABLE", "php": "8.2", "database": "pgsql"},
+            {"moodle-branch": "MOODLE_502_STABLE", "php": "8.3", "database": "pgsql"},
+            {"moodle-branch": "MOODLE_503_STABLE", "php": "8.4", "database": "mariadb"},
+            {"moodle-branch": "main", "php": "8.4", "database": "pgsql"}
+          ]
+      grunt-branch:
+        type: string
+        default: MOODLE_501_STABLE
+      timezone:
+        type: string
+        default: Australia/Sydney
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    continue-on-error: ${{ matrix.moodle-branch == 'main' }}
+    env:
+      TZ: ${{ inputs.timezone }}
+    strategy:
+      matrix:
+        include: ${{ fromJSON(inputs.matrix) }}
+    steps:
+      - name: Moodle Code Checker
+        run: moodle-plugin-ci phpcs --max-warnings 0
+      - name: Moodle PHPDoc Checker
+        run: moodle-plugin-ci phpdoc --max-warnings 0
+      - name: Grunt
+        if: ${{ !cancelled() && matrix.moodle-branch == inputs.grunt-branch }}
+        run: moodle-plugin-ci grunt --max-lint-warnings 0
+      - name: PHPUnit tests
+        run: moodle-plugin-ci phpunit --fail-on-warning
+"""
+
+SHARED_KEY = ("verzog/moodle-ci-workflows", ".github/workflows/moodle-plugin-ci.yml", "v1")
+
+
+def caller_yaml(with_block=""):
+    """A plugin's moodle-ci.yml that hands everything to the shared workflow."""
+    return ("name: Moodle Plugin CI\non:\n  pull_request:\njobs:\n  ci:\n"
+            "    uses: verzog/moodle-ci-workflows/.github/workflows/moodle-plugin-ci.yml@v1\n" + with_block)
+
+
+def shared_repo(with_block="", shared=SHARED_CI):
+    repo = ci_repo(caller_yaml(with_block))
+    repo._shared = {SHARED_KEY: shared} if shared is not None else {}
+    return repo
+
+
+class SharedWorkflowTests(unittest.TestCase):
+    def test_conventions_are_read_from_the_shared_workflow(self):
+        repo = shared_repo()
+        self.assertEqual(levels(run_check("ci_setup", repo)), [OK])
+        self.assertNotIn("CI matrix doesn't test", [f.message for f in run_check("moodle_support", repo)])
+
+    def test_the_callers_inputs_replace_the_defaults(self):
+        bad_matrix = ("    with:\n      matrix: >-\n"
+                      "        [{\"moodle-branch\": \"MOODLE_501_STABLE\", \"php\": \"8.2\"},\n"
+                      "         {\"moodle-branch\": \"MOODLE_502_STABLE\", \"php\": \"8.2\"},\n"
+                      "         {\"moodle-branch\": \"MOODLE_503_STABLE\", \"php\": \"8.3\"},\n"
+                      "         {\"moodle-branch\": \"main\", \"php\": \"8.4\"}]\n")
+        findings = run_check("ci_setup", shared_repo(bad_matrix))
+        self.assertEqual(levels(findings), [RED])
+        self.assertIn("Moodle 5.2 on PHP 8.2", findings[0].message)
+        brisbane = run_check("ci_setup", shared_repo("    with:\n      timezone: Australia/Brisbane\n"))
+        self.assertIn("CI sets TZ Australia/Brisbane", brisbane[0].message)
+        grunt = run_check("ci_setup", shared_repo("    with:\n      grunt-branch: MOODLE_503_STABLE\n"))
+        self.assertIn("Grunt runs on every branch", grunt[0].message)
+
+    def test_unreadable_shared_workflow_is_a_note_not_a_problem(self):
+        repo = shared_repo(shared=None)
+        findings = run_check("ci_setup", repo)
+        self.assertEqual(levels(findings), [INFO])
+        self.assertIn("couldn't be read", findings[0].message)
+        self.assertNotIn(AMBER, levels(run_check("moodle_support", repo)))
+
+    def test_shared_workflow_in_the_same_repo(self):
+        repo = ci_repo("jobs:\n  ci:\n    uses: ./.github/workflows/shared.yml\n")
+        repo._files[".github/workflows/shared.yml"] = SHARED_CI
+        self.assertEqual(levels(run_check("ci_setup", repo)), [OK])
+
+    def test_action_steps_are_not_shared_workflows(self):
+        from plugindash.checks._ci import called_workflows
+        self.assertEqual(called_workflows("steps:\n  - uses: actions/checkout@v6\n"), [])
+        self.assertEqual(called_workflows("jobs:\n  a:\n    uses: x/y/.github/workflows/z.yml@../../main\n"), [])
+
+
 class MoodleBaselineTests(unittest.TestCase):
     def test_baseline(self):
         self.assertEqual(levels(run_check("moodle_baseline", healthy_repo("v/r", "local_x"))), [OK])

@@ -2,12 +2,17 @@
 
 Only what the CI checks need is picked out: the matrix cells (Moodle branch and PHP version) and the
 lines that run each moodle-plugin-ci command. Anything unusual is skipped rather than guessed.
+
+A workflow can hand its job to a shared (reusable) workflow with `uses: owner/repo/.github/workflows/x.yml@ref`.
+`called_workflows()` finds those calls with their `with:` inputs, and `fill_inputs()` writes the inputs into the
+shared workflow's text, so the checks read the matrix and steps that really run.
 """
 
 from __future__ import annotations
 
 import itertools
 import re
+from typing import Any
 
 _BRANCH_KEYS = ("moodle-branch", "moodle_branch")
 _PHP_KEYS = ("php", "php-version", "php_version")
@@ -50,6 +55,127 @@ def _list(value: str) -> list[str]:
     return [_clean(value)] if _clean(value) else []
 
 
+def _block(lines: list[str], index: int) -> list[tuple[str, str]]:
+    """The keys directly under the key on line `index`, as (key, value).
+
+    A value is the rest of the key's line, or for a block scalar (`|`, `>-`...) the lines indented under it.
+    Nested mappings come back with an empty value; read them with another _block() call.
+    """
+    parent = len(lines[index]) - len(lines[index].lstrip())
+    result: list[tuple[str, str]] = []
+    child = None
+    i = index + 1
+    while i < len(lines):
+        line = lines[i]
+        indent = len(line) - len(line.lstrip())
+        if not line.strip():
+            i += 1
+            continue
+        if indent <= parent:
+            break
+        match = re.match(r"^(\s*)([\w-]+)\s*:\s*(.*)$", line)
+        if child is None:
+            child = indent
+        if match and indent == child:
+            value = match.group(3)
+            if re.fullmatch(r"[|>][-+]?", value.strip()):
+                body = []
+                i += 1
+                while i < len(lines) and (not lines[i].strip() or len(lines[i]) - len(lines[i].lstrip()) > indent):
+                    body.append(lines[i].strip())
+                    i += 1
+                result.append((match.group(2), "\n".join(body).strip()))
+                continue
+            result.append((match.group(2), _clean(value)))
+        i += 1
+    return result
+
+
+def _key_line(lines: list[str], key: str, indent: int | None = None, start: int = 0) -> int | None:
+    """The first line from `start` that is `key:` (at `indent` spaces, if given)."""
+    for i in range(start, len(lines)):
+        match = re.match(rf"^(\s*){re.escape(key)}\s*:", lines[i])
+        if match and (indent is None or len(match.group(1)) == indent):
+            return i
+    return None
+
+
+_CALL = re.compile(r"^(\s*)uses\s*:\s*['\"]?([^\s'\"]+)")
+_REMOTE = re.compile(r"([\w.-]+/[\w.-]+)/(\.github/workflows/[\w.-]+\.ya?ml)@([\w./-]+)")
+_LOCAL = re.compile(r"\./(\.github/workflows/[\w.-]+\.ya?ml)")
+
+
+def called_workflows(text: str) -> list[dict[str, Any]]:
+    """Each job-level call to a shared workflow: {"repo" (None for one in this repo), "path", "ref", "inputs"}.
+
+    Step-level `uses:` (actions such as actions/checkout) don't point at .github/workflows/, so they're skipped.
+    """
+    lines = strip_comments(text).splitlines()
+    calls = []
+    for i, line in enumerate(lines):
+        match = _CALL.match(line)
+        if not match:
+            continue
+        target = match.group(2)
+        remote, local = _REMOTE.fullmatch(target), _LOCAL.fullmatch(target)
+        if not remote and not local:
+            continue
+        if remote and ".." in remote.group(3):
+            continue
+        indent = len(match.group(1))
+        # The job's own keys sit at the same indent as uses:; find its with: among them.
+        top = i
+        while top > 0 and (not lines[top - 1].strip() or len(lines[top - 1]) - len(lines[top - 1].lstrip()) >= indent):
+            top -= 1
+        end = i + 1
+        while end < len(lines) and (not lines[end].strip() or len(lines[end]) - len(lines[end].lstrip()) >= indent):
+            end += 1
+        job = lines[top:end]
+        found = _key_line(job, "with", indent)
+        inputs = dict(_block(job, found)) if found is not None else {}
+        if remote:
+            calls.append({"repo": remote.group(1), "path": remote.group(2), "ref": remote.group(3), "inputs": inputs})
+        else:
+            calls.append({"repo": None, "path": local.group(1), "ref": None, "inputs": inputs})
+    return calls
+
+
+def fill_inputs(called: str, inputs: dict[str, str]) -> str:
+    """The shared workflow's text with each `inputs.<name>` replaced by the caller's value or the input's default.
+
+    The `on:` section (input descriptions and defaults) is left out, so a default matrix the caller replaced
+    isn't read as well.
+    """
+    lines = strip_comments(called).splitlines()
+    values: dict[str, str] = {}
+    declared = _key_line(lines, "inputs", None, _key_line(lines, "workflow_call") or 0)
+    if declared is not None:
+        names = [name for name, _ in _block(lines, declared)]
+        for name in names:
+            spot = _key_line(lines, name, None, declared)
+            default = dict(_block(lines, spot)).get("default") if spot is not None else None
+            if default is not None:
+                values[name] = default
+    values.update(inputs)
+    starts = [_key_line(lines, key, 0) for key in ("on", "'on'", '"on"')]
+    start = next((i for i in starts if i is not None), None)
+    if start is not None:
+        end = start + 1
+        while end < len(lines) and (not lines[end].strip() or lines[end].startswith((" ", "\t"))):
+            end += 1
+        lines = lines[:start] + lines[end:]
+    text = "\n".join(lines)
+
+    def whole(match: re.Match) -> str:
+        return values.get(match.group(1), match.group(0))
+
+    def part(match: re.Match) -> str:
+        return f"'{values[match.group(1)]}'" if match.group(1) in values else match.group(0)
+
+    text = re.sub(r"\$\{\{\s*inputs\.([\w-]+)\s*\}\}", whole, text)  # TZ: ${{ inputs.timezone }}
+    return re.sub(r"\binputs\.([\w-]+)", part, text)  # if: matrix.moodle-branch == inputs.grunt-branch
+
+
 def _cell(raw: dict[str, str]) -> dict[str, str] | None:
     branch = next((raw[k] for k in _BRANCH_KEYS if k in raw), None)
     if branch is None:
@@ -65,8 +191,9 @@ def matrix_cells(text: str) -> tuple[list[dict[str, str]], bool]:
     text = strip_comments(text)
     lines = text.splitlines()
     cells: list[dict[str, str]] = []
-    # include: items in flow style, `- {moodle-branch: ..., php: ...}`.
-    for match in re.finditer(r"^\s*-\s*\{([^}]*)\}", text, re.M):
+    # include: items in flow style, `- {moodle-branch: ..., php: ...}`, or JSON cells as a shared workflow's
+    # matrix input, `{"moodle-branch": ..., "php": ...}`.
+    for match in re.finditer(r"\{([^{}]*[\"']?moodle[-_]branch[\"']?\s*:[^{}]*)\}", text, re.I):
         cell = _cell(_pairs(match.group(1)))
         if cell:
             cells.append(cell)

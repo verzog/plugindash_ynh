@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ..model import AMBER, INFO, OK, Finding
 from ..moodle import branch_label, branch_name, supported_range
-from ._util import ci_workflows
+from ._util import ci_text, ci_workflows
 
 ID = "moodle_support"
 TITLE = "New Moodle release watch"
@@ -45,8 +45,10 @@ def run(repo, plugin, ctx):
             ))
     workflows = ci_workflows(repo, ctx.cfg)
     if workflows:
-        texts = [repo.workflow_text(wf) or "" for wf in workflows]
-        if not any(branch_name(latest) in text for text in texts):
+        read = [ci_text(repo, wf) for wf in workflows]
+        texts = [text for text, _ in read]
+        unreadable = any(missing for _, missing in read)  # Its matrix is in a shared workflow we can't see.
+        if not unreadable and not any(branch_name(latest) in text for text in texts):
             wf = workflows[0]
             findings.append(Finding(
                 ID, AMBER, f"CI matrix doesn't test {branch_name(latest)}", repo.file_url(wf.path),

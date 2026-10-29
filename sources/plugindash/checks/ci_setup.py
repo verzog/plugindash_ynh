@@ -5,11 +5,11 @@ from __future__ import annotations
 import os
 import re
 
-from ..model import AMBER, OK, RED, Finding
+from ..model import AMBER, INFO, OK, RED, Finding
 from ..modes import MODE_A, plugin_mode
 from ..moodle import branch_label, branch_name, min_php
 from ._ci import branch_number, command_lines, has_flag, matrix_cells, php_version, strip_comments
-from ._util import ci_workflows
+from ._util import ci_text, ci_workflows
 
 ID = "ci_setup"
 TITLE = "CI setup"
@@ -43,12 +43,13 @@ STRICT_FLAGS = (
 
 
 def _plugin_ci(repo, cfg):
-    """The first CI workflow that runs moodle-plugin-ci or has a Moodle branch matrix."""
+    """The first CI workflow that runs moodle-plugin-ci or has a Moodle branch matrix (directly, or in a shared
+    workflow it calls), with the shared workflows' text added and any that couldn't be read."""
     for wf in ci_workflows(repo, cfg):
-        text = repo.workflow_text(wf) or ""
+        text, unreadable = ci_text(repo, wf)
         if "moodle-plugin-ci" in text or re.search(r"moodle[-_]branch", text, re.I):
-            return wf, text
-    return None, ""
+            return wf, text, unreadable
+    return None, "", []
 
 
 def _matrix_findings(text, low, high, latest, url):
@@ -94,14 +95,39 @@ def _grunt_on_other_branches(text, low):
     return False
 
 
+def _release_findings(repo, plugin, github, url):
+    """The repo-level rules, which don't depend on reading the workflow: no .travis.yml, a release workflow."""
+    findings = []
+    if github and repo.file(".travis.yml") is not None:
+        findings.append(Finding(
+            ID, AMBER, "Remove .travis.yml; CI runs on GitHub Actions", repo.file_url(".travis.yml"),
+        ))
+    if github and plugin_mode(plugin) != MODE_A and not any(
+        os.path.basename(w.path).lower() in ("release.yml", "release.yaml") for w in repo.workflows()
+    ):
+        findings.append(Finding(
+            ID, AMBER, "No release workflow (.github/workflows/release.yml) to build the install zip", url,
+        ))
+    return findings
+
+
 def run(repo, plugin, ctx):
-    wf, raw = _plugin_ci(repo, ctx.cfg)
+    wf, raw, unreadable = _plugin_ci(repo, ctx.cfg)
     if wf is None:
         return []  # No CI at all is the ci_activity check's job.
     text = strip_comments(raw)
     url = repo.file_url(wf.path)
     low, high = ctx.cfg["moodle_min_branch"], ctx.cfg["moodle_max_branch"]
     github = repo.source == "github"
+    if unreadable:
+        # The matrix and steps live in a shared workflow we can't see: checking only the caller would report
+        # problems that aren't there.
+        findings = [Finding(
+            ID, INFO, f"CI uses {', '.join(unreadable)}, which couldn't be read, so the matrix and steps weren't "
+            "checked (a private repo needs the token to have Contents access to it)", url,
+        )]
+        findings += _release_findings(repo, plugin, github, url)
+        return findings
     findings = []
     if github:  # GitLab's parallel: matrix uses a different layout; only the common rules apply there.
         findings += _matrix_findings(text, low, high, ctx.moodle_latest, url)
@@ -119,16 +145,7 @@ def run(repo, plugin, ctx):
         findings.append(Finding(ID, AMBER, f"Warnings don't fail CI; add {', '.join(missing)}", url))
     if github and _grunt_on_other_branches(text, low):
         findings.append(Finding(ID, AMBER, f"Grunt runs on every branch; limit it to {branch_name(low)}", url))
-    if github and repo.file(".travis.yml") is not None:
-        findings.append(Finding(
-            ID, AMBER, "Remove .travis.yml; CI runs on GitHub Actions", repo.file_url(".travis.yml"),
-        ))
-    if github and plugin_mode(plugin) != MODE_A and not any(
-        os.path.basename(w.path).lower() in ("release.yml", "release.yaml") for w in repo.workflows()
-    ):
-        findings.append(Finding(
-            ID, AMBER, "No release workflow (.github/workflows/release.yml) to build the install zip", url,
-        ))
+    findings += _release_findings(repo, plugin, github, url)
     if not findings:
         findings.append(Finding(ID, OK, "CI setup follows the conventions", url))
     return findings

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import urllib.parse
 from datetime import datetime
 from typing import Any
@@ -62,6 +63,21 @@ class GitHubRepo(RepoView):
 
     def file_url(self, path: str, ref: str | None = None) -> str:
         return f"{self.html_url}/blob/{ref or self.default_branch}/{path}"
+
+    @cached
+    def shared_workflow(self, repo: str, path: str, ref: str) -> str | None:
+        # The names come from a workflow file (untrusted), so only a plain owner/repo and workflow path are fetched.
+        if not re.fullmatch(r"[\w.-]+/[\w.-]+", repo) or not re.fullmatch(r"\.github/workflows/[\w.-]+\.ya?ml", path):
+            return None
+        if ".." in repo or ".." in ref or not re.fullmatch(r"[\w./-]+", ref):
+            return None
+        try:
+            return self.client.get_text(
+                f"/repos/{repo}/contents/{urllib.parse.quote(path)}", {"ref": ref},
+                headers={"Accept": "application/vnd.github.raw+json"},
+            )
+        except (NotFound, AuthError):  # Private, gone, or the token can't see it: the caller says so.
+            return None
 
     @cached
     def list_dir(self, path: str) -> list[str] | None:

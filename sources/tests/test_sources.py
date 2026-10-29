@@ -165,6 +165,21 @@ class GitHubSourceTests(unittest.TestCase):
             repo.security_alerts()
         self.assertEqual(self.source.moodle_latest_branch(), 503)
 
+    def test_shared_workflow(self):
+        path = "/repos/verzog/moodle-ci-workflows/contents/.github/workflows/moodle-plugin-ci.yml"
+        ROUTES[path] = lambda h, q: (200, "name: shared at " + q.get("ref", "?"), {})
+        ROUTES["/repos/verzog/private-ci/contents/.github/workflows/ci.yml"] = (403, {"message": "Forbidden"}, {})
+        repo = self.source.list_repos()[0]
+        self.assertEqual(repo.shared_workflow("verzog/moodle-ci-workflows", ".github/workflows/moodle-plugin-ci.yml",
+                                              "v1"), "name: shared at v1")
+        self.assertIsNone(repo.shared_workflow("verzog/private-ci", ".github/workflows/ci.yml", "main"))
+        before = len(SEEN)
+        # Names from a workflow file are untrusted: anything but a plain repo and workflow path isn't fetched.
+        self.assertIsNone(repo.shared_workflow("verzog/x", "../../secrets.yml", "main"))
+        self.assertIsNone(repo.shared_workflow("verzog/x/../y", ".github/workflows/ci.yml", "main"))
+        self.assertIsNone(repo.shared_workflow("verzog/x", ".github/workflows/ci.yml", "../main"))
+        self.assertEqual(len(SEEN), before)
+
     def test_end_to_end_collect(self):
         directory = Directory(f"{BASE}/api/1.3/pluginfo.php", Client())
         status = collect(self.cfg, sources=[self.source], directory=directory)
