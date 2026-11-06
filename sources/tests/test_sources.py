@@ -180,6 +180,13 @@ class GitHubSourceTests(unittest.TestCase):
         self.assertIsNone(repo.shared_workflow("verzog/x", ".github/workflows/ci.yml", "../main"))
         self.assertEqual(len(SEEN), before)
 
+    def test_repo_tags(self):
+        ROUTES["/repos/verzog/moodle-security-ci/tags"] = [{"name": "v1.2.2"}, {"name": "v1.2.1"}]
+        repo = self.source.list_repos()[0]
+        self.assertEqual(repo.repo_tags("verzog/moodle-security-ci"), ["v1.2.2", "v1.2.1"])
+        self.assertIsNone(repo.repo_tags("verzog/missing"))  # 404 from the fake server.
+        self.assertIsNone(repo.repo_tags("verzog/x/../y"))
+
     def test_end_to_end_collect(self):
         directory = Directory(f"{BASE}/api/1.3/pluginfo.php", Client())
         status = collect(self.cfg, sources=[self.source], directory=directory)
