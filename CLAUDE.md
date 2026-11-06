@@ -124,6 +124,10 @@ runs `security-lint.php`; until then it's one info note. Once adopted:
 - **Red:** the latest release's `tests/release/<tag>.md` *at that tag* fails the `check-test-record.sh` rules
   (`record_problems()`), or is missing although the release has the gate's assets.
 - **Info:** a release with neither the record nor the gate's assets predates the gate.
+- Workflow text is read with comments stripped, so a commented-out step doesn't count. The PHPMD step must
+  block: `continue-on-error` on the step or its job is amber.
+- **Incomplete info notes**: a shared workflow it calls can't be read (OSV/PHPMD not judged), or the newest tag
+  can't be looked up (pin not compared, e.g. GitLab, whose source can't read GitHub tags).
 - GitLab repos get only the job and pin rules.
 
 `repo_files` checks the boilerplate sniff against the mode (SCCA must exclude it, red; GPL must keep it,

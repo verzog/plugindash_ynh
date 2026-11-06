@@ -668,6 +668,54 @@ class SecurityCiTests(unittest.TestCase):
         self.assertEqual(levels(older), [INFO])  # Released before the gate was adopted.
         self.assertIn("before the release gate", older[0].message)
 
+    def test_blank_tester_does_not_borrow_the_next_line(self):
+        from plugindash.checks.security_ci import record_problems
+        self.assertEqual(record_problems(RECORD, "v1.3.0"), [])
+        self.assertEqual(record_problems(RECORD.replace("Tester: Vernon Spain", "Tester:"), "v1.3.0"), ["no tester"])
+        self.assertIn("no 'Result: PASS'", record_problems(RECORD.replace("Result: PASS", "Result:\nPASS"), "v1.3.0"))
+
+    def test_commented_out_steps_do_not_count(self):
+        ci = CI_YAML + "\n" + SECURITY_JOB
+        no_osv = ci.replace("run: bash security-ci/bin/osv-check.sh plugin",
+                            "run: echo skipped  # bash security-ci/bin/osv-check.sh plugin")
+        self.assertIn("doesn't run osv-check.sh",
+                      run_check("security_ci", security_repo(**{".github/workflows/moodle-ci.yml": no_osv}))[0].message)
+        lint_off = ci.replace("run: php security-ci/bin/security-lint.php",
+                              "run: echo off  # php security-ci/bin/security-lint.php")
+        self.assertIn("isn't adopted yet",
+                      run_check("security_ci", security_repo(**{".github/workflows/moodle-ci.yml": lint_off}))[0].message)
+        gate_off = GATED_RELEASE.replace("run: bash security-ci/bin/check-test-record.sh",
+                                         "run: echo  # bash security-ci/bin/check-test-record.sh")
+        self.assertIn("release.yml isn't the gated version",
+                      run_check("security_ci", security_repo(**{".github/workflows/release.yml": gate_off}))[0].message)
+
+    def test_phpmd_must_block(self):
+        ci = CI_YAML + "\n" + SECURITY_JOB
+        lax = ci.replace("      - name: Unused code (PHPMD, blocking)\n",
+                         "      - name: Unused code (PHPMD, blocking)\n        continue-on-error: true\n")
+        self.assertNotEqual(lax, ci)
+        findings = run_check("security_ci", security_repo(**{".github/workflows/moodle-ci.yml": lax}))
+        self.assertIn("allowed to fail", findings[0].message)
+        lax_job = ci.replace("    runs-on: ubuntu-24.04\n    permissions:", "    runs-on: ubuntu-24.04\n"
+                             "    continue-on-error: true\n    permissions:")
+        self.assertNotEqual(lax_job, ci)
+        findings = run_check("security_ci", security_repo(**{".github/workflows/moodle-ci.yml": lax_job}))
+        self.assertIn("allowed to fail", findings[0].message)
+
+    def test_unreadable_shared_steps_and_unknown_tags(self):
+        caller = ("jobs:\n  security:\n    env:\n      SECURITY_CI_REF: v1.2.2\n    steps:\n"
+                  "      - run: php security-ci/bin/security-lint.php plugin\n"
+                  "  more:\n    uses: verzog/private/.github/workflows/security.yml@v1\n")
+        findings = run_check("security_ci", security_repo(**{".github/workflows/moodle-ci.yml": caller}))
+        self.assertEqual(levels(findings), [INFO])
+        self.assertTrue(findings[0].incomplete)
+        self.assertIn("weren't checked", findings[0].message)
+        repo = security_repo()
+        repo._tags = {}  # E.g. a GitLab plugin, which can't read the tags on GitHub.
+        findings = run_check("security_ci", repo, ctx())
+        self.assertEqual(levels(findings), [INFO])
+        self.assertIn("wasn't compared", findings[0].message)
+
     def test_missing_release_files(self):
         repo = security_repo()
         repo._release.assets = [a for a in repo._release.assets if not a["name"].endswith(".sha256")]
