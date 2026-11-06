@@ -54,6 +54,10 @@ class RepoView:
         '.github/workflows/moodle-plugin-ci.yml', 'v1'). None when it can't be read or the source has none."""
         return None
 
+    def repo_tags(self, repo: str) -> list[str] | None:
+        """Tag names of another repo (e.g. 'verzog/moodle-security-ci'). None when they can't be read."""
+        return None
+
     def readme(self) -> str | None:
         for name in ("README.md", "README.txt", "README", "readme.md"):
             text = self.file(name)

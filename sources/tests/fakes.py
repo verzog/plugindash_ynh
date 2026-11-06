@@ -108,6 +108,9 @@ class FakeRepo(RepoView):
     def shared_workflow(self, repo, path, ref):
         return getattr(self, "_shared", {}).get((repo, path, ref))
 
+    def repo_tags(self, repo):
+        return getattr(self, "_tags", {}).get(repo)
+
     def latest_release(self):
         return self._release
 

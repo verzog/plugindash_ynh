@@ -6,6 +6,7 @@ It finds plugins by their `version.php` and checks, for each one:
 - **Releases**: whether the latest tag matches `$plugin->release`, the install zip is attached, and there is merged work not yet released.
 - **Moodle versions**: whether a newer stable Moodle is outside `$plugin->supported` or missing from the CI matrix.
 - **Licence**: whether the `@license` tag, the `LICENSE` file and the README agree.
+- **Security CI**: for plugins that use moodle-security-ci, whether the security job, its pinned version and the release gate are in place, and whether the latest release's test record passes.
 - **Housekeeping**: open issues and pull requests, Dependabot security alerts, and whether the Moodle plugins directory listing is behind your latest release.
 
 The page has four views: a List of plugins, a To do list grouped by problem, a Releases table and a Grid of checks.

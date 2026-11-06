@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fakes import (  # noqa: E402
-    CI_YAML, NOW, SCCA_PHPCS, SCCA_TAG, DeniedRepo, FakeDirectory, FakeRepo, FakeSource, denied_repo, failed_run,
+    CI_YAML, GITATTRIBUTES, NOW, SCCA_PHPCS, SCCA_TAG, DeniedRepo, FakeDirectory, FakeRepo, FakeSource, denied_repo, failed_run,
     healthy_repo, lang_file_text, ok_run, release, sample_directory, sample_repos, version_php,
 )
 from plugindash import config as config_mod  # noqa: E402
@@ -459,6 +459,221 @@ class SharedWorkflowTests(unittest.TestCase):
         from plugindash.checks._ci import called_workflows
         self.assertEqual(called_workflows("steps:\n  - uses: actions/checkout@v6\n"), [])
         self.assertEqual(called_workflows("jobs:\n  a:\n    uses: x/y/.github/workflows/z.yml@../../main\n"), [])
+
+
+# The security job and gated release workflow, as moodle-security-ci's ci/github/ snippets give them.
+SECURITY_JOB = """# Add this job to .github/workflows/moodle-ci.yml, under "jobs:", next to the existing "test" job.
+# It needs no Moodle install or database, so it runs in about a minute and fails fast.
+#
+# Also remove the old non-blocking "PHP Mess Detector" step from the test job: this job replaces it
+# with a blocking unused-code check.
+
+  security:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      TZ: Australia/Sydney
+      SECURITY_CI_REF: v1.2.2  # Pin a tag; bump deliberately.
+    steps:
+      - name: Check out plugin
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          path: plugin
+
+      - name: Set up PHP (lowest supported)
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962  # 2.40.0
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer
+
+      - name: Fetch moodle-security-ci
+        run: git clone --depth 1 --branch "$SECURITY_CI_REF" https://github.com/verzog/moodle-security-ci.git security-ci
+
+      - name: Security lint
+        if: ${{ !cancelled() }}
+        run: php security-ci/bin/security-lint.php --annotate-prefix=plugin/ plugin
+
+      - name: Known vulnerabilities in third-party code (OSV)
+        if: ${{ !cancelled() }}
+        run: bash security-ci/bin/osv-check.sh plugin
+
+      - name: Unused code (PHPMD, blocking)
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p tools
+          composer require --quiet --no-interaction --working-dir=tools phpmd/phpmd:^2.15
+          tools/vendor/bin/phpmd plugin text security-ci/config/phpmd-unused.xml \\
+            --exclude '*/tests/*,*/vendor/*,*/amd/*,*/node_modules/*'
+"""
+GATED_RELEASE = """# .github/workflows/release.yml — "Release zip"
+#
+# Publishing a GitHub release runs this. It refuses to attach a zip unless:
+#   1. the tag (minus its leading "v") equals $plugin->release in version.php,
+#   2. security-lint reports nothing and OSV finds no known vulnerabilities in lockfiles,
+#   3. tests/release/<tag>.md exists, is fully ticked and says "Result: PASS".
+# It then attaches the installable zip, its SHA-256 checksum and the test record to the release.
+# If a gate fails: fix on main, then re-run this workflow (never attach files by hand).
+
+name: Release zip
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+      TZ: Australia/Sydney
+      SECURITY_CI_REF: v1.2.2  # Same pin as moodle-ci.yml.
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          path: plugin
+
+      - name: Read plugin metadata and check the tag
+        id: meta
+        working-directory: plugin
+        run: |
+          # Read version.php as text; never execute it.
+          RELEASE=$(sed -nE "s/^\\\\\\$plugin->release[[:space:]]*=[[:space:]]*'([^']+)'.*/\\1/p" version.php)
+          COMPONENT=$(sed -nE "s/^\\\\\\$plugin->component[[:space:]]*=[[:space:]]*'([^']+)'.*/\\1/p" version.php)
+          if [ -z "$RELEASE" ] || [ -z "$COMPONENT" ]; then
+            echo "::error file=version.php::Could not read \\$plugin->release or \\$plugin->component."
+            exit 1
+          fi
+          if [ "${TAG#v}" != "$RELEASE" ]; then
+            echo "::error file=version.php::Tag $TAG does not match \\$plugin->release '$RELEASE'."
+            exit 1
+          fi
+          echo "component=$COMPONENT" >> "$GITHUB_OUTPUT"
+          echo "name=${COMPONENT#*_}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up PHP (lowest supported)
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962  # 2.40.0
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Fetch moodle-security-ci
+        run: git clone --depth 1 --branch "$SECURITY_CI_REF" https://github.com/verzog/moodle-security-ci.git security-ci
+
+      - name: Gate — security lint
+        run: php security-ci/bin/security-lint.php --annotate-prefix=plugin/ plugin
+
+      - name: Gate — known vulnerabilities (OSV)
+        run: bash security-ci/bin/osv-check.sh plugin
+
+      - name: Gate — release test record
+        run: bash security-ci/bin/check-test-record.sh plugin "$TAG"
+
+      - name: Build zip and attach with the test record
+        env:
+          COMPONENT: ${{ steps.meta.outputs.component }}
+          NAME: ${{ steps.meta.outputs.name }}
+        run: |
+          ZIP="${COMPONENT}-${TAG}.zip"
+          RECORD="${COMPONENT}-${TAG}-test-record.md"
+          # The folder inside the zip must be the plugin's directory name, not the repo name.
+          git -C plugin archive --format=zip --prefix="${NAME}/" -o "../${ZIP}" "$TAG"
+          cp "plugin/tests/release/${TAG}.md" "$RECORD"
+          # Checksum so a site admin can confirm the zip they install is the one CI built.
+          sha256sum "$ZIP" > "${ZIP}.sha256"
+          gh release upload "$TAG" "$ZIP" "${ZIP}.sha256" "$RECORD" --clobber --repo "$GITHUB_REPOSITORY"
+"""
+RECORD = """# Release test record — local_x v1.3.0
+
+Date: 05/11/2026
+Tester: Vernon Spain
+Previous release: v1.2.0
+Result: PASS
+
+- [x] CI green on the release commit.
+- [x] security-lint: 0 findings.
+"""
+
+
+def security_repo(**changes):
+    """A plugin that has adopted moodle-security-ci fully, with its v1.3.0 release made through the gate."""
+    repo = healthy_repo("v/r", "local_x")
+    repo._files[".github/workflows/moodle-ci.yml"] = CI_YAML + "\n" + SECURITY_JOB
+    repo._files[".github/workflows/release.yml"] = GATED_RELEASE
+    repo._files["TESTING.md"] = "# Test plan\n"
+    repo._files["tests/release/TEMPLATE.md"] = "# Release test record\n"
+    repo._files[".gitattributes"] = GITATTRIBUTES + "/TESTING.md export-ignore\n"
+    repo._tag_files["v1.3.0"]["tests/release/v1.3.0.md"] = RECORD
+    for name in ("local_x-v1.3.0.zip.sha256", "local_x-v1.3.0-test-record.md"):
+        repo._release.assets.append({"name": name, "url": f"https://example/{name}"})
+    repo._tags = {"verzog/moodle-security-ci": ["v1.2.2", "v1.2.1", "v1.10.0-beta", "latest"]}
+    for key, value in changes.items():
+        if value is None:
+            repo._files.pop(key, None)
+        else:
+            repo._files[key] = value
+    return repo
+
+
+class SecurityCiTests(unittest.TestCase):
+    def test_not_adopted_is_a_note(self):
+        findings = run_check("security_ci", healthy_repo("v/r", "local_x"))
+        self.assertEqual(levels(findings), [INFO])
+        self.assertIn("isn't adopted yet", findings[0].message)
+
+    def test_fully_adopted_is_ok(self):
+        self.assertEqual(levels(run_check("security_ci", security_repo())), [OK])
+
+    def test_job_and_pin(self):
+        ci = CI_YAML + "\n" + SECURITY_JOB
+        no_osv = security_repo(**{".github/workflows/moodle-ci.yml": ci.replace("osv-check.sh", "osv.sh")})
+        self.assertIn("doesn't run osv-check.sh", run_check("security_ci", no_osv)[0].message)
+        repo = security_repo()
+        repo._tags["verzog/moodle-security-ci"].append("v1.3.0")
+        messages = [f.message for f in run_check("security_ci", repo, ctx())]
+        self.assertIn("CI pins moodle-security-ci v1.2.2; v1.3.0 is out", messages)
+        split = security_repo(**{".github/workflows/release.yml": GATED_RELEASE.replace("v1.2.2", "v1.2.1")})
+        self.assertIn("pin different", run_check("security_ci", split)[0].message)
+
+    def test_release_gate_files(self):
+        old_release = security_repo(**{".github/workflows/release.yml": "jobs:\n  release:\n    uses: x/y/.github/"
+                                       "workflows/release-zip.yml@v1\n"})
+        self.assertEqual(run_check("security_ci", old_release)[0].message,
+                         "Release gate incomplete: release.yml isn't the gated version")
+        bare = security_repo(**{"TESTING.md": None, "tests/release/TEMPLATE.md": None, ".gitattributes": GITATTRIBUTES})
+        findings = run_check("security_ci", bare)
+        self.assertEqual(levels(findings), [AMBER])  # One line for the whole step.
+        self.assertEqual(findings[0].message, "Release gate incomplete: no TESTING.md; no tests/release/TEMPLATE.md; "
+                         "TESTING.md isn't export-ignored")
+
+    def test_test_record(self):
+        repo = security_repo()
+        repo._tag_files["v1.3.0"]["tests/release/v1.3.0.md"] = RECORD.replace("PASS", "FAIL").replace(
+            "- [x] security", "- [ ] security")
+        findings = run_check("security_ci", repo)
+        self.assertEqual(levels(findings), [RED])
+        self.assertIn("no 'Result: PASS'; 1 unticked item", findings[0].message)
+        repo = security_repo()
+        del repo._tag_files["v1.3.0"]["tests/release/v1.3.0.md"]
+        self.assertEqual(levels(run_check("security_ci", repo)), [RED])  # The gate ran, so the record should exist.
+        repo._release.assets = repo._release.assets[:1]
+        older = run_check("security_ci", repo)
+        self.assertEqual(levels(older), [INFO])  # Released before the gate was adopted.
+        self.assertIn("before the release gate", older[0].message)
+
+    def test_missing_release_files(self):
+        repo = security_repo()
+        repo._release.assets = [a for a in repo._release.assets if not a["name"].endswith(".sha256")]
+        findings = run_check("security_ci", repo)
+        self.assertEqual(levels(findings), [AMBER])
+        self.assertIn("local_x-v1.3.0.zip.sha256 is missing", findings[0].message)
 
 
 class MoodleBaselineTests(unittest.TestCase):
