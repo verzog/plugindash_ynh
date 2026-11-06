@@ -16,7 +16,7 @@
     ['Licence', ['licence', 'licence_mode', 'repo_files']],
     ['Strings & JS', ['lang_strings', 'amd_build']],
     ['Directory', ['plugins_directory']],
-    ['Security', ['security_alerts']],
+    ['Security', ['security_alerts', 'security_ci']],
     ['Issues', ['issues']],
     ['Upkeep', ['dormant_actions']]
   ];

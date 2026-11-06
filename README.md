@@ -26,6 +26,7 @@ Once a day it finds every repository you own that contains a Moodle `version.php
 | Licence mode | In-house SCCA (Mode A) plugin in a public repo | |
 | Repository files | SCCA plugin doesn't exclude phpcs's boilerplate sniff (CI fails) | GPL plugin excludes it; `@copyright` holder doesn't match the mode; `.gitattributes` missing `eol=lf`/`export-ignore`; no Privacy API provider |
 | Security alerts | Critical/high Dependabot alerts | Medium/low alerts |
+| Security CI | The latest release's `tests/release/<tag>.md` is missing or doesn't pass `check-test-record.sh` | Once [moodle-security-ci](https://github.com/verzog/moodle-security-ci) is adopted: no OSV or blocking PHPMD step; an old `SECURITY_CI_REF`, or different pins in CI and `release.yml`; `release.yml` not the gated one; no `TESTING.md` or `tests/release/TEMPLATE.md`; `TESTING.md` not export-ignored; the release's `.sha256` or test record not attached. Not adopted yet is info only |
 | Plugins directory | | moodle.org listing older than your latest release |
 
 The page has four views:

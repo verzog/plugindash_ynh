@@ -100,7 +100,7 @@ On the server:
 
 Check IDs: `ci_status`, `ci_activity`, `release_match`, `release_zip`, `unreleased`, `issues`,
 `moodle_support`, `moodle_baseline`, `ci_setup`, `licence`, `licence_mode`, `repo_files`, `lang_strings`,
-`amd_build`, `security_alerts`, `plugins_directory`, `dormant_actions`.
+`amd_build`, `security_alerts`, `security_ci`, `plugins_directory`, `dormant_actions`.
 
 `moodle_baseline` and `ci_setup` hold plugins to the conventions in Verzog's Moodle plugin CLAUDE.md. The
 supported range is two config panel settings, `moodle_min_branch` / `moodle_max_branch` ("5.1" / "5.3"),
@@ -113,6 +113,22 @@ moodle-plugin-ci.yml@v1`, or `./.github/workflows/x.yml`). `_util.ci_text()` the
 (`RepoView.shared_workflow()`, one level, names validated) and `_ci.fill_inputs()` writes the caller's `with:`
 values, or the input defaults, in place of `inputs.*`. If it can't be read, `ci_setup` gives an info note and
 skips the workflow rules rather than reporting problems it can't see.
+
+`security_ci` follows verzog/moodle-security-ci. It is adopted when a CI workflow (or the shared workflow it calls)
+runs `security-lint.php`; until then it's one info note. Once adopted:
+- **Amber:** no `osv-check.sh` or `phpmd-unused.xml`; `SECURITY_CI_REF` older than that repo's newest version tag
+  (`RepoView.repo_tags()`, once per run in `ctx.extra`); a different pin in `release.yml`; one "Release gate
+  incomplete" line listing what step 6 still lacks (gated `release.yml` with `check-test-record`, `TESTING.md`,
+  `tests/release/TEMPLATE.md`, `/TESTING.md export-ignore`); the latest release missing its `.sha256` or
+  `-test-record.md` (info for SCCA).
+- **Red:** the latest release's `tests/release/<tag>.md` *at that tag* fails the `check-test-record.sh` rules
+  (`record_problems()`), or is missing although the release has the gate's assets.
+- **Info:** a release with neither the record nor the gate's assets predates the gate.
+- Workflow text is read with comments stripped, so a commented-out step doesn't count. The PHPMD step must
+  block: `continue-on-error` on the step or its job is amber.
+- **Incomplete info notes**: a shared workflow it calls can't be read (OSV/PHPMD not judged), or the newest tag
+  can't be looked up (pin not compared, e.g. GitLab, whose source can't read GitHub tags).
+- GitLab repos get only the job and pin rules.
 
 `repo_files` checks the boilerplate sniff against the mode (SCCA must exclude it, red; GPL must keep it,
 amber), the `@copyright` holder (skipped for forks), `.gitattributes` and `classes/privacy/provider.php`.

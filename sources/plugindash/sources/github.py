@@ -80,6 +80,16 @@ class GitHubRepo(RepoView):
             return None
 
     @cached
+    def repo_tags(self, repo: str) -> list[str] | None:
+        if not re.fullmatch(r"[\w.-]+/[\w.-]+", repo) or ".." in repo:  # From a workflow file: untrusted.
+            return None
+        try:
+            data = self.client.get_json(f"/repos/{repo}/tags", {"per_page": 100})
+        except (NotFound, AuthError):
+            return None
+        return [t["name"] for t in data or [] if isinstance(t, dict) and "name" in t]
+
+    @cached
     def list_dir(self, path: str) -> list[str] | None:
         try:
             data = self.client.get_json(
