@@ -5,7 +5,7 @@
 
   var LABELS = {red: 'Needs fixing', amber: 'Needs attention', green: 'Healthy', grey: 'Not checked'};
   var ORDER = ['red', 'amber', 'green', 'grey'];
-  var state = {filter: 'all', query: '', status: null, history: {}, view: 'list'};
+  var state = {filter: 'all', query: '', status: null, history: {}, view: 'list', hidePrivate: false};
   var VIEWS = [['list', 'List'], ['todo', 'To do'], ['releases', 'Releases'], ['grid', 'Grid']];
   var LEVEL_RANK = {ok: 0, info: 1, amber: 2, red: 3};
   /* Columns of the Grid view: each groups related checks. */
@@ -77,6 +77,13 @@
     return LABELS[repo.status];
   }
 
+  /* Every repo the page should show: all of them, less the private ones when "Hide private"
+     is on. The status filter and the search box narrow this further (see matches). */
+  function visibleRepos() {
+    var repos = (state.status && state.status.repos) || [];
+    return state.hidePrivate ? repos.filter(function (r) { return !r.private; }) : repos;
+  }
+
   function renderHeader() {
     var s = state.status;
     var tz = s.timezone || 'UTC';
@@ -99,7 +106,7 @@
 
     var rack = document.getElementById('rack');
     rack.textContent = '';
-    s.repos.forEach(function (repo) {
+    visibleRepos().forEach(function (repo) {
       var a = el('a', repo.status);
       a.href = '#' + slug(repo.full_name);
       a.title = (repo.component || repo.name) + ': ' + stateLabel(repo) + '. ' + repo.summary;
@@ -112,8 +119,11 @@
   function renderSegments() {
     var seg = document.getElementById('segments');
     seg.textContent = '';
-    var counts = state.status.counts || {};
-    var items = [{key: 'all', label: 'All', count: state.status.repos.length}];
+    // Count what's actually shown, so "Hide private" is reflected in the chips too.
+    var repos = visibleRepos();
+    var counts = {};
+    repos.forEach(function (repo) { counts[repo.status] = (counts[repo.status] || 0) + 1; });
+    var items = [{key: 'all', label: 'All', count: repos.length}];
     ORDER.forEach(function (key) {
       if (counts[key]) { items.push({key: key, label: LABELS[key], count: counts[key]}); }
     });
@@ -397,7 +407,7 @@
     var empty = document.getElementById('empty');
     list.textContent = '';
     board.textContent = '';
-    var shown = state.status.repos.filter(matches);
+    var shown = visibleRepos().filter(matches);
     list.hidden = state.view !== 'list';
     board.hidden = state.view === 'list';
     if (state.view === 'list') {
@@ -412,7 +422,9 @@
         'then use Run now.';
     } else if (!shown.length) {
       empty.hidden = false;
-      empty.textContent = 'No plugins match. Clear the search or choose All.';
+      empty.textContent = state.hidePrivate && !visibleRepos().length
+        ? 'Every plugin shown is private. Turn off Hide private to see them.'
+        : 'No plugins match. Clear the search or choose All.';
     } else {
       empty.hidden = true;
     }
@@ -451,9 +463,9 @@
     }
   }
 
-  /* The plugins currently shown, so an export matches the filter and search on screen. */
+  /* The plugins currently shown, so an export matches the filter, search and Hide private on screen. */
   function shownRepos() {
-    return state.status ? state.status.repos.filter(matches) : [];
+    return state.status ? visibleRepos().filter(matches) : [];
   }
 
   function dateStamp() {
@@ -514,13 +526,22 @@
     if (node) { node.textContent = text || ''; }
   }
 
+  /* Show the Hide private control only when there's at least one private repo to hide. */
+  function renderPrivateToggle() {
+    var wrap = document.getElementById('hide-private-wrap');
+    var anyPrivate = ((state.status && state.status.repos) || []).some(function (r) { return r.private; });
+    wrap.hidden = !anyPrivate;
+    document.getElementById('hide-private').checked = state.hidePrivate;
+  }
+
   function render() {
     renderViews();
+    renderPrivateToggle();
     renderHeader();
     renderSegments();
     renderList();
     renderAbout();
-    setExportsEnabled((state.status.repos || []).length > 0);
+    setExportsEnabled(visibleRepos().length > 0);
   }
 
   /* After starting a check, wait for a newer run to land, then redraw the page. */
@@ -600,6 +621,14 @@
     state.view = VIEWS.some(function (v) { return v[0] === saved; }) ? saved : 'list';
     document.getElementById('search').addEventListener('input', function (e) {
       state.query = e.target.value.trim();
+      renderList();
+    });
+    state.hidePrivate = store('plugindash.hideprivate') === '1';
+    document.getElementById('hide-private').addEventListener('change', function (e) {
+      state.hidePrivate = e.target.checked;
+      store('plugindash.hideprivate', e.target.checked ? '1' : '');
+      renderHeader();
+      renderSegments();
       renderList();
     });
     setExportsEnabled(false);

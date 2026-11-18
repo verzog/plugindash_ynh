@@ -1360,8 +1360,29 @@ class RunnerTests(unittest.TestCase):
             if not line.startswith("#"):
                 self.assertRegex(line, r'^[a-z_]+(\{.*\})? -?\d+(\.\d+)?$')
 
+    def test_prometheus_hides_private_names(self):
+        status = collect(self.cfg, sources=[FakeSource(sample_repos())], directory=sample_directory(), now=NOW)
+        # tool_imageextractor is the private repo in the sample set; tool_automate is public.
+        exposed = prometheus(status, hide_private=False)
+        self.assertIn("moodle-tool_imageextractor", exposed)
+        hidden = prometheus(status, hide_private=True)
+        # The private repo's name and component are gone, replaced by a stable anonymous token.
+        self.assertNotIn("moodle-tool_imageextractor", hidden)
+        self.assertNotIn('component="tool_imageextractor"', hidden)
+        self.assertIn('repo="private:', hidden)
+        # Public repos are still named, and the output is still valid exposition format.
+        self.assertIn("moodle-tool_automate", hidden)
+        for line in hidden.splitlines():
+            if not line.startswith("#"):
+                self.assertRegex(line, r'^[a-z_]+(\{.*\})? -?\d+(\.\d+)?$')
+
 
 class ConfigTests(unittest.TestCase):
+
+    def test_metrics_hide_private_is_boolean(self):
+        self.assertFalse(config_mod.normalise({})["metrics_hide_private"])
+        self.assertTrue(config_mod.normalise({"metrics_hide_private": "1"})["metrics_hide_private"])
+        self.assertFalse(config_mod.normalise({"metrics_hide_private": "0"})["metrics_hide_private"])
     def test_tags_and_overrides_from_yunohost_strings(self):
         cfg = config_mod.normalise({
             "github_owners": "verzog, educheckout", "exclude_repos": "Moodle-Old,",

@@ -136,6 +136,21 @@ h1 { font-size: 1.75rem; line-height: 1.2; margin: 0; letter-spacing: -0.01em; }
 .export:disabled { opacity: 0.5; cursor: default; }
 .export:disabled:hover { border-color: var(--rule); color: var(--ink); }
 
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.9375rem;
+  padding: 6px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+}
+.toggle input { cursor: pointer; margin: 0; }
+
 .run-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .run {
   font: inherit;

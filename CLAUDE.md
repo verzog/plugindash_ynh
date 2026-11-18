@@ -33,6 +33,11 @@ red, amber, green or grey on a single page. It is for his own use only: one admi
   detached collector run. Runs are serialised by `$data_dir/run.lock`, so it never overlaps the timer.
 - "No published releases yet" is info, not amber: an unreleased plugin isn't unhealthy.
 - GitHub's own "Dependabot Updates" workflow is never plugin CI (ignored by default).
+- Private repos are always collected and shown on the SSO-protected page. Two separate controls can hide
+  them: the page's **Hide private** toggle (browser-only, remembered in localStorage; removes them from the
+  rack, counts, every view and the exports, but not from the data) and the `metrics_hide_private` config
+  setting (server-side; keeps private repos in `/metrics` but anonymises their `repo`/`component` labels to
+  `private:<hash>` so a scraper can't see the names). The two are independent.
 
 ## Behaviours that are easy to get wrong
 
@@ -86,7 +91,8 @@ sources/
     notify/              ntfy.py, mail.py, matrix.py
     phpparse.py, moodle.py, history.py (SQLite: runs, statuses, alert_problems, meta), output.py, http.py, config.py
   www/                   static page: index.html, app.js, style.css, favicon.svg (reads status.json +
-                         history.json; views List / To do / Releases / Grid, Export CSV / Export PDF, Run check now)
+                         history.json; views List / To do / Releases / Grid, Hide private toggle,
+                         Export CSV / Export PDF, Run check now)
   tests/                 fakes.py, test_core.py, test_sources.py, make_preview.py
   extensions-example/    copied to $data_dir/extensions on install
 ```

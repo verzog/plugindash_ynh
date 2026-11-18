@@ -39,6 +39,7 @@ plugindash_set_defaults() {
     ynh_app_setting_set_default --key=matrix_room --value=""
     ynh_app_setting_set_default --key=matrix_token --value=""
     ynh_app_setting_set_default --key=metrics_allow --value="127.0.0.1,::1"
+    ynh_app_setting_set_default --key=metrics_hide_private --value=0
 }
 
 # Prints an error if $1 isn't a time zone this server knows (an IANA name such as
@@ -122,6 +123,7 @@ plugindash_write_config() {
         PD_MATRIX_HOMESERVER="$matrix_homeserver" \
         PD_MATRIX_ROOM="$matrix_room" \
         PD_MATRIX_TOKEN="$matrix_token" \
+        PD_METRICS_HIDE_PRIVATE="$metrics_hide_private" \
         python3 -I "$install_dir/app/run.py" write-config --output "$dest"
     chown "$app:$app" "$dest"
     chmod 600 "$dest"
