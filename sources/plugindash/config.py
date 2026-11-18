@@ -40,6 +40,8 @@ DEFAULTS: dict[str, Any] = {
     "moodle_latest_branch": 0,      # 0 = look it up from moodle/moodle on GitHub.
     "directory_api": "https://download.moodle.org/api/1.3/pluginfo.php",
     # Alerts.
+    # Leave private repos' names out of the /metrics feed (anonymised to a stable token).
+    "metrics_hide_private": False,
     "alert_on": "worse",            # "worse", "any" or "none".
     "reminder_day": "mon",          # Weekly reminder of open problems: "mon".."sun", or "off".
     "ntfy_url": "",
@@ -119,7 +121,7 @@ def normalise(raw: dict[str, Any]) -> dict[str, Any]:
     ]
     cfg["exclude_repos"] = [r.lower() for r in cfg["exclude_repos"]]
     cfg["severity_overrides"] = _as_overrides(cfg["severity_overrides"])
-    for key in ("github_enabled", "gitlab_enabled", "include_forks"):
+    for key in ("github_enabled", "gitlab_enabled", "include_forks", "metrics_hide_private"):
         cfg[key] = _as_bool(cfg[key])
     for key in ("history_days", "stale_days", "moodle_latest_branch", "smtp_port"):
         try:

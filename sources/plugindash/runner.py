@@ -312,7 +312,7 @@ def _run(cfg: dict[str, Any], send_alerts: bool = True, sources=None, directory=
                 "duration_s": 0, "api_calls": 0,
             }
             write_json(os.path.join(www, "status.json"), status)
-            write_atomic(os.path.join(www, "metrics"), prometheus(status))
+            write_atomic(os.path.join(www, "metrics"), prometheus(status, cfg["metrics_hide_private"]))
             if send_alerts and cfg["alert_on"] != "none":
                 send_all(cfg, "Plugin dashboard: run failed", str(err), "high", cfg.get("public_url") or None)
             return status
@@ -323,7 +323,7 @@ def _run(cfg: dict[str, Any], send_alerts: bool = True, sources=None, directory=
         history.prune(cfg["history_days"])
         write_json(os.path.join(www, "status.json"), status)
         write_json(os.path.join(www, "history.json"), history.recent(30, _zone(cfg)))
-        write_atomic(os.path.join(www, "metrics"), prometheus(status))
+        write_atomic(os.path.join(www, "metrics"), prometheus(status, cfg["metrics_hide_private"]))
 
         # The first run (or the first after upgrading to problem-based alerts) only remembers what it found.
         found = alerts.changes(previous, status["repos"]) if previous is not None else []

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import tempfile
@@ -34,14 +35,25 @@ def _label(value: str) -> str:
     return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
 
 
-def prometheus(status: dict[str, Any]) -> str:
+def _identity(repo: dict[str, Any], hide_private: bool) -> tuple[str, str]:
+    """The (repo, component) labels for /metrics. When hide_private is on, a private repo's
+    name and component are replaced by a stable, non-identifying token, so a scraper of the
+    feed never sees them. The token stays the same across runs, so the time series is unbroken."""
+    if hide_private and repo.get("private"):
+        token = hashlib.sha256(repo["full_name"].encode("utf-8")).hexdigest()[:12]
+        return "private:" + token, ""
+    return repo["full_name"], repo.get("component") or ""
+
+
+def prometheus(status: dict[str, Any], hide_private: bool = False) -> str:
     """Prometheus text exposition format."""
     lines = [
         "# HELP plugindash_repo_status Repository colour: 0 green, 1 grey, 2 amber, 3 red.",
         "# TYPE plugindash_repo_status gauge",
     ]
     for repo in status["repos"]:
-        labels = (f'repo="{_label(repo["full_name"])}",component="{_label(repo.get("component") or "")}",'
+        name, component = _identity(repo, hide_private)
+        labels = (f'repo="{_label(name)}",component="{_label(component)}",'
                   f'source="{_label(repo["source"])}"')
         lines.append(f"plugindash_repo_status{{{labels}}} {STATUS_RANK[repo['status']]}")
     lines += [
@@ -49,12 +61,13 @@ def prometheus(status: dict[str, Any]) -> str:
         "# TYPE plugindash_findings gauge",
     ]
     for repo in status["repos"]:
+        name, _ = _identity(repo, hide_private)
         counts: dict[str, int] = {}
         for finding in repo["findings"]:
             counts[finding["level"]] = counts.get(finding["level"], 0) + 1
         for level in ("red", "amber", "info"):
             lines.append(
-                f'plugindash_findings{{repo="{_label(repo["full_name"])}",level="{level}"}} {counts.get(level, 0)}'
+                f'plugindash_findings{{repo="{_label(name)}",level="{level}"}} {counts.get(level, 0)}'
             )
     lines += [
         "# HELP plugindash_repos Number of repositories per colour.",

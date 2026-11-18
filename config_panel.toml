@@ -212,3 +212,8 @@ services = []
         type = "tags"
         optional = true
         help = "IP addresses or ranges, such as your Prometheus server's Tailscale address. Everyone else is refused."
+
+        [main.metrics.metrics_hide_private]
+        ask = "Hide private repository names in /metrics"
+        type = "boolean"
+        help = "Private repositories still appear, but with their name and component replaced by a stable anonymous token, so a metrics scraper never sees them. The dashboard page is unaffected."

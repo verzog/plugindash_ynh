@@ -30,6 +30,8 @@ Add a scrape job pointing at `https://__DOMAIN____PATH__/metrics` (path `/metric
 
 A Grafana alert on `time() - plugindash_last_run_timestamp_seconds > 2*86400` tells you if the daily check stops running.
 
+Turn on **Hide private repository names in /metrics** to keep private repositories in the feed but with their `repo` and `component` labels replaced by a stable anonymous token (`repo="private:…"`), so a scraper never sees their names. The dashboard page still shows them in full. (The page also has its own browser-only **Hide private** toggle, handy for screenshots you'll share; it changes nothing on the server.)
+
 ## Colours
 
 - **Red**: a check found something broken or inconsistent (CI failing on a supported branch, tag ≠ `version.php`, release zip missing, licence mismatch, critical/high security alert).
