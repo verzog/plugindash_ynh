@@ -630,6 +630,8 @@
       renderHeader();
       renderSegments();
       renderList();
+      // Keep the exports in step: revealing repos must re-enable them (and vice versa).
+      setExportsEnabled(visibleRepos().length > 0);
     });
     setExportsEnabled(false);
     document.getElementById('export-csv').addEventListener('click', exportCsv);
